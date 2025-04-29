@@ -144,7 +144,7 @@ st.session_state.profile = profile
 CFG, CATEGORIES = PRODUCERS[profile], PRODUCERS[profile]["categories"]
 
 with title_col:
-    st.title(f"📋 Inventory Counter – {profile}")
+    st.title(f"Inventory Counter – {profile}")
 
 
 
