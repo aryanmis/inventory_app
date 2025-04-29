@@ -165,4 +165,3 @@ if st.button("Send Inventory Report ✉️", key=f"send_{recipient}_{ready}", di
     else:
         st.success("Report sent! 🎉")
 
-st.caption("© 2025 Inventory Tool")
