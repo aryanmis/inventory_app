@@ -1,25 +1,30 @@
-# inventory_app.py – Multi‑producer inventory & email app (mainstay items)
+# inventory_app.py – Multi‑producer inventory & email app (template editor)
 """
-Inventory Counter & Emailer – **v3.1** (2025‑04‑29)
+Inventory Counter & Emailer – **v4.0** (2025‑04‑29)
 ==================================================
-Now each producer profile can list **mainstay items** that appear automatically
-whenever you select that profile.  Quantities start at 0 so you only need to
-fill the counts.
+**Front‑end template editor**
+-----------------------------
+Each producer can now **load, edit, and save** its own “template” list of
+mainstay items without touching the code.  Templates are stored as JSON files
+under `templates/{producer_slug}.json` and are loaded automatically when you
+select a profile.
 
-**What changed**
-* `PRODUCERS[profile]["mainstays"]` → list of `{name, tag}` dicts.
-* Switching profiles pre‑populates the inventory with those items (qty 0).
-* Added *Reset to template* button to bring back the mainstay list if you clear
-  it manually.
+### New UI buttons
+* **Reset to template items** – load the template (starts with code default on
+  first run).
+* **Save current list as template** – overwrite the JSON file with whatever’s
+  on screen (names + tags; quantities are *not* stored).
 
-Everything else (dup‑handling, grouped e‑mail, categories) works the same.
+Everything else (categories, grouped e‑mail, duplicate handling) is unchanged.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import smtplib
 from email.message import EmailMessage
+from pathlib import Path
 from typing import Dict, Any, Tuple, List
 
 import streamlit as st
@@ -36,13 +41,13 @@ SMTP_PASS = SECRETS.get("pass") or os.getenv("SMTP_PASS")
 if not (SMTP_USER and SMTP_PASS):
     st.warning("⚠️  Configure SMTP credentials in Secrets or env vars to enable e‑mail.")
 
-# ----- Producer‑specific defaults -------------------------------------------
+# ----- Built‑in defaults (first‑run seed) --------------------
 PRODUCERS: Dict[str, Dict[str, Any]] = {
     "Why Not Pie": {
         "categories": ["Cafe", "Market", "Goodies", "Frozen"],
         "default_subject": "Why Not Pie – Daily Inventory",
         "default_recipient": "",
-        "mainstays": [  # Appears with qty 0 on profile load
+        "mainstays": [
             {"name": "PBJ Muffins", "tag": "Cafe"},
             {"name": "Biscotti", "tag": "Cafe"},
             {"name": "Biscotti", "tag": "Frozen"},
@@ -60,6 +65,10 @@ PRODUCERS: Dict[str, Dict[str, Any]] = {
     },
 }
 
+# Directory where user‑editable templates live
+TEMPLATE_DIR = Path(__file__).with_name("templates")
+TEMPLATE_DIR.mkdir(exist_ok=True)
+
 # ─────────────────────────────────────────────────────────────
 # 1.  Utility helpers
 # ─────────────────────────────────────────────────────────────
@@ -71,6 +80,30 @@ def make_key(name: str, tag: str) -> str:
 def split_key(key: str) -> Tuple[str, str]:
     return key.rsplit(SEP, 1)
 
+def slugify(name: str) -> str:
+    return "_".join(name.lower().split())
+
+def template_path(profile: str) -> Path:
+    return TEMPLATE_DIR / f"{slugify(profile)}.json"
+
+def load_template(profile: str) -> List[Dict[str, str]]:
+    """Return list of {name, tag} for profile (file → fallback → empty)."""
+    p = template_path(profile)
+    if p.exists():
+        try:
+            return json.loads(p.read_text())
+        except Exception:
+            st.error(f"Failed to read template {p}; using fallback.")
+    return PRODUCERS.get(profile, {}).get("mainstays", [])
+
+def save_template(profile: str, items: List[Dict[str, str]]):
+    """Write template JSON (names + tags)"""
+    p = template_path(profile)
+    try:
+        p.write_text(json.dumps(items, indent=2))
+    except Exception as e:
+        st.error(f"Could not save template: {e}")
+
 def _nl2br(txt: str) -> str:
     return txt.replace("\n", "<br>") if txt else ""
 
@@ -78,17 +111,7 @@ def _nl2br(txt: str) -> str:
 # 2.  E‑mail composer (grouped by category from active profile)
 # ─────────────────────────────────────────────────────────────
 
-def send_email(
-    *,
-    recipient: str,
-    inventory: Dict[str, Dict[str, Any]],
-    categories: List[str],
-    subject: str,
-    before_txt: str,
-    after_txt: str,
-) -> None:
-    """Compose and send grouped inventory e‑mail."""
-
+def send_email(*, recipient: str, inventory: Dict[str, Dict[str, Any]], categories: List[str], subject: str, before_txt: str, after_txt: str) -> None:
     grouped: Dict[str, List[Tuple[str, int]]] = {cat: [] for cat in categories}
     for k, v in inventory.items():
         name, tag = split_key(k)
@@ -125,18 +148,13 @@ def send_email(
         + "</table>"
     )
 
-    # Build and send message
     msg = EmailMessage()
     msg["Subject"] = subject
     msg["From"] = SMTP_USER
     msg["To"] = recipient
 
-    body_plain = "\n\n".join(filter(None, [before_txt.strip(), table_plain, after_txt.strip()]))
-    msg.set_content(body_plain)
-
-    body_html = "\n".join(
-        filter(None, [f"<p>{_nl2br(before_txt.strip())}</p>" if before_txt.strip() else "", table_html, f"<p>{_nl2br(after_txt.strip())}</p>" if after_txt.strip() else ""])
-    )
+    msg.set_content("\n\n".join(filter(None, [before_txt.strip(), table_plain, after_txt.strip()])))
+    body_html = "\n".join(filter(None, [f"<p>{_nl2br(before_txt.strip())}</p>" if before_txt.strip() else "", table_html, f"<p>{_nl2br(after_txt.strip())}</p>" if after_txt.strip() else ""]))
     msg.add_alternative(f"<html><body>{body_html}</body></html>", subtype="html")
 
     with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as smtp:
@@ -149,7 +167,6 @@ def send_email(
 
 st.set_page_config(page_title="Inventory Counter", page_icon="📋", layout="wide")
 
-# ----- Profile selector -----
 profile_names = list(PRODUCERS.keys())
 sel_index = profile_names.index(st.session_state.get("profile", profile_names[0]))
 profile = st.selectbox("Producer profile", profile_names, index=sel_index)
@@ -161,20 +178,25 @@ st.title(f"📋 Inventory Counter – {profile}")
 
 # ---------- Initialize / reset inventory ----------
 
-def load_mainstays():
-    """Populate inventory with mainstay items (qty 0)."""
+def load_template_into_inventory():
     st.session_state.inventory = {}
-    for itm in CFG.get("mainstays", []):
-        key = make_key(itm["name"], itm["tag"])
-        st.session_state.inventory[key] = {"qty": 0}
+    for itm in load_template(profile):
+        st.session_state.inventory[make_key(itm["name"], itm["tag"])] = {"qty": 0}
     st.session_state.inventory_profile = profile
 
 if "inventory" not in st.session_state or st.session_state.get("inventory_profile") != profile:
-    load_mainstays()
+    load_template_into_inventory()
 
-# Button to reload template items if user cleared list
-if st.button("Reset to template items", type="secondary"):
-    load_mainstays()
+# Template control buttons
+col_reset, col_save = st.columns([1, 1])
+with col_reset:
+    if st.button("Reset to template items", type="secondary"):
+        load_template_into_inventory()
+with col_save:
+    if st.button("Save current list as template", type="primary"):
+        tpl_items = [{"name": split_key(k)[0], "tag": split_key(k)[1]} for k in st.session_state.inventory.keys()]
+        save_template(profile, tpl_items)
+        st.success("Template saved!")
 
 # ---------- Add item row ----------
 
@@ -214,18 +236,4 @@ if st.session_state.inventory:
 
         plus_col, minus_col, del_col, item_col, qty_col, tag_col = st.columns([1, 1, 1, 4, 2, 3])
         if plus_col.button("➕", key=f"plus_{key}"):
-            st.session_state.inventory[key]["qty"] += 1
-        if minus_col.button("➖", key=f"minus_{key}"):
-            st.session_state.inventory[key]["qty"] = max(0, qty - 1)
-        if del_col.button("🗑️", key=f"del_{key}"):
-            st.session_state.inventory.pop(key, None)
-            continue
-
-        if key not in st.session_state.inventory:
-            continue
-
-        item_col.write(name)
-        new_q = qty_col.number_input(" ", min_value=0, step=1, value=qty, key=f"num_{key}", label_visibility="collapsed")
-        st.session_state.inventory[key]["qty"] = int(new_q)
-
-        new_tag = tag_col.selectbox(" ", options
+            st.session_state
