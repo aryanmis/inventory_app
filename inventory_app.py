@@ -3,17 +3,15 @@
 Inventory Counter & Emailer
 ==========================
 Streamlit GUI to:
-* Add items **with an initial quantity**
+* Add items **with an initial quantity** (item is created *only* when you press **Add**)
 * Adjust quantities inline via **number boxes** or ➕/➖ shortcuts
 * Delete individual rows or clear the whole list
 * Customise subject, intro, outro text
-* Send an e‑mail report using SMTP credentials stored in **st.secrets**
+* Send an e-mail report using SMTP credentials stored in **st.secrets**
 
-2025‑04‑30 ‒ Feature Update
---------------------------
-* **Inline edit** – each Quantity cell is now a `number_input`; type any value.
-* **Add with quantity** – the add‑item row has a Qty field (defaults to 0).
-* Logic simplified; plus/minus buttons still there for quick bumps.
+2025-04-30 ‒ Update
+-------------------
+* **Fix:** Typing in the *Item* box no longer auto-adds the row; the item is added exactly once when you click **Add**.
 """
 
 from __future__ import annotations
@@ -42,7 +40,7 @@ def _nl2br(text: str) -> str:
 
 
 def send_email(recipient: str, inventory: dict[str, int], *, subject: str, before: str, after: str) -> None:
-    """Build plain‑text + HTML e‑mail and send via SSL SMTP."""
+    """Build plain-text + HTML e-mail and send via SSL SMTP."""
     msg = EmailMessage()
     msg["Subject"] = subject
     msg["From"] = SMTP_USER
@@ -90,7 +88,7 @@ st.title("📋 Inventory Counter")
 if "inventory" not in st.session_state:
     st.session_state.inventory: dict[str, int] = {}
 
-# ---------- Add‑item row ----------
+# ---------- Add-item row ----------
 
 def add_item_cb() -> None:
     name = st.session_state.get("new_item", "").strip()
@@ -99,10 +97,11 @@ def add_item_cb() -> None:
         st.session_state.inventory[name] = max(0, qty)
         st.session_state["new_item"] = ""
         st.session_state["new_qty"] = 0
+        st.rerun()
 
 col_name, col_qty, col_btn = st.columns([3, 1, 1])
 with col_name:
-    st.text_input("Item", key="new_item", placeholder="e.g. Blueberry Muffin", on_change=add_item_cb)
+    st.text_input("Item", key="new_item", placeholder="e.g. Blueberry Muffin")
 with col_qty:
     st.number_input("Qty", key="new_qty", min_value=0, value=0, step=1, format="%d")
 with col_btn:
@@ -117,7 +116,6 @@ if st.session_state.inventory:
         qty = st.session_state.inventory[item]
         plus_col, minus_col, del_col, item_col, qty_col = st.columns([1, 1, 1, 4, 2])
 
-        # +/- buttons
         if plus_col.button("➕", key=f"plus_{item}"):
             st.session_state.inventory[item] += 1
             st.rerun()
@@ -128,11 +126,9 @@ if st.session_state.inventory:
             st.session_state.inventory.pop(item, None)
             st.rerun()
 
-        # Name & editable quantity field
         if item in st.session_state.inventory:
             item_col.write(item)
-            num_key = f"qty_{item}"
-            new_val = qty_col.number_input("", min_value=0, step=1, value=qty, key=num_key)
+            new_val = qty_col.number_input("", min_value=0, step=1, value=qty, key=f"qty_{item}")
             if new_val != qty:
                 st.session_state.inventory[item] = new_val
 
@@ -145,20 +141,28 @@ else:
 
 st.divider()
 
-# ---------- E‑mail customisation ----------
-subject = st.text_input("E‑mail subject", value="Inventory Report")
+# ---------- E-mail customisation ----------
+subject = st.text_input("E-mail subject", value="Inventory Report")
 msg_before = st.text_area("Text before table (optional)")
 msg_after = st.text_area("Text after table (optional)")
 
 st.divider()
 
 # ---------- Send section ----------
-recipient = st.text_input("Recipient e‑mail")
+recipient = st.text_input("Recipient e-mail")
 ready = recipient.strip() and any(v > 0 for v in st.session_state.inventory.values())
 if st.button("Send Inventory Report ✉️", key=f"send_{recipient}_{ready}", disabled=not ready):
     try:
-        send_email(recipient.strip(), st.session_state.inventory, subject=subject.strip() or "Inventory Report", before=msg_before, after=msg_after)
-    except Exception as e:
-        st.error(f"Failed to send: {e}")
+        send_email(
+            recipient.strip(),
+            st.session_state.inventory,
+            subject=subject.strip() or "Inventory Report",
+            before=msg_before,
+            after=msg_after,
+        )
+    except Exception as exc:
+        st.error(f"Failed to send: {exc}")
     else:
         st.success("Report sent! 🎉")
+
+st.caption("© 2025 Inventory Tool")
