@@ -102,18 +102,23 @@ if "inventory" not in st.session_state:
     st.session_state.inventory: Dict[str, int] = {}
 
 # ---------- Add item row ----------
+# ---------- Add item row ----------
+
+def add_item_cb():
+    name = st.session_state.get("new_item", "").strip()
+    qty = int(st.session_state.get("new_qty", 0))
+    if name:
+        st.session_state.inventory[name] = qty
+        st.session_state["new_item"] = ""
+        st.session_state["new_qty"] = 0
+
 col_name, col_qty, col_add = st.columns([3, 1, 1])
 with col_name:
-    new_item = st.text_input("Item", key="new_item", placeholder="e.g. Blueberry Muffin")
+    st.text_input("Item", key="new_item", placeholder="e.g. Blueberry Muffin")
 with col_qty:
-    new_qty = st.number_input("Qty", key="new_qty", min_value=0, value=0, step=1, format="%d")
+    st.number_input("Qty", key="new_qty", min_value=0, value=0, step=1, format="%d")
 with col_add:
-    if st.button("Add", use_container_width=True):
-        name = new_item.strip()
-        if name:
-            st.session_state.inventory[name] = int(new_qty)
-            st.session_state.new_item = ""
-            st.session_state.new_qty = 0
+    st.button("Add", key="add_btn", on_click=add_item_cb, use_container_width=True)
 
 st.divider()
 
@@ -168,5 +173,5 @@ if st.button("Send Inventory Report ✉️", key=f"send_{ready}", disabled=not r
     except Exception as exc:
         st.error(f"Failed to send: {exc}")
     else:
-        st.success("Report sent!! 🎉")
+        st.success("Report sent! 🎉")
 
