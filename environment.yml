@@ -1,7 +1,6 @@
 # environment.yml  ── place at the project root
 name: inventory_app           # the environment’s name
-channels:
-  - default               # default channel for conda packages
+channels:             # default channel for conda packages
   - conda-forge               # richer, up-to-date builds
 dependencies:
   - python=3.11               # 3.10–3.12 all work; pick one
