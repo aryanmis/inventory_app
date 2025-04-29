@@ -1,6 +1,19 @@
 [
-  { "name": "PBJ Muffins",            "tag": "Cafe"   },
+  { "name": "Blueberry Muffin",            "tag": "Cafe"   },
   { "name": "Biscotti",               "tag": "Cafe"   },
   { "name": "Biscotti",               "tag": "Frozen" },
-  { "name": "Salami n Cheese Sando",  "tag": "Market" }
+  { "name": "Salami & Cheese Sandwich",  "tag": "Market" },
+  { "name": "Hard Boiled Egg",  "tag": "Market"   },
+  { "name": "Buckwheat CC Cookie",  "tag": "Goodies" },
+  { "name": "Vegan CC Cookie",  "tag": "Goodies" },
+  { "name": "Magic Cookie Bar",  "tag": "Goodies"   },
+  { "name": "Peanut Butter CC M&M Cookie",  "tag": "Goodies" },
+  { "name": "Earl Grey Shortbread",  "tag": "Goodies" },
+  { "name": "Rosemary Shortbread",  "tag": "Goodies" },
+  { "name": "Plain Shortbread",  "tag": "Goodies"   },
+  { "name": "Shortbread Box",  "tag": "Goodies"   },
+  { "name": "Breakfast Cookie",  "tag": "Goodies" },
+  { "name": "Fudgy Brownie",  "tag": "Goodies"},
+  { "name": "Sugar Cookie", "tag": "Goodies"}
+
 ]
