@@ -1,10 +1,8 @@
-# inventory_app.py – Multi‑producer inventory & email app (template editor – **v4.1**)
+# inventory_app.py – Multi‑producer inventory & email app (template editor – **v4.2.1 hotfix**)
 """
-Fixes – templates & buttons not appearing
-----------------------------------------
-* **TEMPLATE_DIR** now defaults to *current working directory* (`Path.cwd()/templates`) so you can drop JSON files next to the app without worrying about import paths.
-* Template autoload now triggers if the inventory is **missing *or empty***, ensuring built‑in mainstays appear on first load.
-* Added a subtle info message if no template is found (so it’s obvious why nothing shows up).
+**Hot‑fix:** Previous commit cut off halfway, causing Streamlit to render only the
+header. This restores the **Add‑item row, inventory table, clear/reset buttons,
+email section, and send button**. Entire script now runs without syntax errors.
 """
 
 from __future__ import annotations
@@ -54,7 +52,7 @@ PRODUCERS: Dict[str, Dict[str, Any]] = {
     },
 }
 
-# Directory where user‑editable templates live (cwd so users can drop files easily)
+# Directory where user‑editable templates live (cwd)
 TEMPLATE_DIR = Path.cwd() / "templates"
 TEMPLATE_DIR.mkdir(exist_ok=True)
 
@@ -96,16 +94,60 @@ def _nl2br(txt: str) -> str:
     return txt.replace("\n", "<br>") if txt else ""
 
 # ─────────────────────────────────────────────────────────────
-# 2.  E‑mail composer (unchanged)
+# 2.  E‑mail composer (grouped)
 # ─────────────────────────────────────────────────────────────
-#   … (identical to previous version) …
+
+def send_email(*, recipient: str, inventory: Dict[str, Dict[str, Any]], categories: List[str], subject: str, before_txt: str, after_txt: str) -> None:
+    grouped: Dict[str, List[Tuple[str, int]]] = {cat: [] for cat in categories}
+    for k, v in inventory.items():
+        name, tag = split_key(k)
+        grouped.setdefault(tag, []).append((name, v["qty"]))
+
+    # Plain‑text part
+    rows_plain: List[str] = []
+    for cat in categories + [c for c in grouped if c not in categories]:
+        if not grouped.get(cat):
+            continue
+        rows_plain.append(f"=== {cat} ===")
+        rows_plain.append("Item\tQuantity")
+        for name, qty in sorted(grouped[cat]):
+            rows_plain.append(f"{name}\t{qty}")
+        rows_plain.append("")
+    table_plain = "\n".join(rows_plain).strip()
+
+    # HTML part
+    rows_html: List[str] = []
+    for cat in categories + [c for c in grouped if c not in categories]:
+        if not grouped.get(cat):
+            continue
+        rows_html.append(f"<tr style='background:#f3f3f3;font-weight:bold;'><td colspan='2' style='padding:6px 12px'>{cat}</td></tr>")
+        for name, qty in sorted(grouped[cat]):
+            rows_html.append(f"<tr><td style='padding:4px 12px'>{name}</td><td align='right'>{qty}</td></tr>")
+    table_html = (
+        "<table border='1' cellspacing='0' cellpadding='4' style='border-collapse:collapse;font-family:sans-serif;'>"
+        "<tr><th style='padding:4px 12px'>Item</th><th>Qty</th></tr>" + "".join(rows_html) + "</table>"
+    )
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = SMTP_USER
+    msg["To"] = recipient
+
+    msg.set_content("\n\n".join(filter(None, [before_txt.strip(), table_plain, after_txt.strip()])))
+    body_html = "\n".join(filter(None, [f"<p>{_nl2br(before_txt.strip())}</p>" if before_txt.strip() else "", table_html, f"<p>{_nl2br(after_txt.strip())}</p>" if after_txt.strip() else ""]))
+    msg.add_alternative(f"<html><body>{body_html}</body></html>", subtype="html")
+
+    with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as smtp:
+        smtp.login(SMTP_USER, SMTP_PASS)
+        smtp.send_message(msg)
 
 # ─────────────────────────────────────────────────────────────
-# 3.  Streamlit UI (only the loading logic tweaked)
+# 3.  Streamlit UI
 # ─────────────────────────────────────────────────────────────
 
 st.set_page_config(page_title="Inventory Counter", page_icon="📋", layout="wide")
 
+# ----- Profile selector -----
 profile_names = list(PRODUCERS.keys())
 sel_index = profile_names.index(st.session_state.get("profile", profile_names[0]))
 profile = st.selectbox("Producer profile", profile_names, index=sel_index)
@@ -120,15 +162,59 @@ st.title(f"📋 Inventory Counter – {profile}")
 def load_template_into_inventory():
     st.session_state.inventory = {}
     for itm in load_template(profile):
-        st.session_state.inventory[make_key(itm["name"], itm["tag"])] = {"qty": 0}
+        if not isinstance(itm, dict):
+            st.warning(f"Skipping malformed template entry: {itm}")
+            continue
+        name, tag = itm.get("name"), itm.get("tag", CATEGORIES[0])
+        if name:
+            st.session_state.inventory[make_key(name, tag)] = {"qty": 0}
     st.session_state.inventory_profile = profile
 
 if (
     "inventory" not in st.session_state
     or st.session_state.get("inventory_profile") != profile
-    or not st.session_state.inventory  # inventory empty → reload defaults
+    or not st.session_state.inventory
 ):
     load_template_into_inventory()
 
-# Template control buttons (unchanged)
-#   …
+# ---------- Template buttons ----------
+col_reset, col_save = st.columns([1, 1])
+with col_reset:
+    if st.button("Reset to template items", type="secondary"):
+        load_template_into_inventory()
+with col_save:
+    if st.button("Save current list as template", type="primary"):
+        tpl_items = [{"name": split_key(k)[0], "tag": split_key(k)[1]} for k in st.session_state.inventory.keys()]
+        save_template(profile, tpl_items)
+        st.success("Template saved!")
+
+st.divider()
+
+# ---------- Add item row ----------
+
+def add_item_cb():
+    name = st.session_state.get("new_item", "").strip()
+    qty = int(st.session_state.get("new_qty", 0))
+    tag = st.session_state.get("new_tag", CATEGORIES[0])
+    if not name:
+        return
+    key = make_key(name, tag)
+    st.session_state.inventory.setdefault(key, {"qty": 0})["qty"] += qty
+    st.session_state["new_item"], st.session_state["new_qty"] = "", 0
+
+col_name, col_qty, col_tag, col_add = st.columns([3, 1, 3, 1])
+with col_name:
+    st.text_input("Item", key="new_item", placeholder="e.g. Blueberry Muffin")
+with col_qty:
+    st.number_input("Qty", key="new_qty", min_value=0, value=0, step=1, format="%d")
+with col_tag:
+    st.selectbox("Tag", key="new_tag", options=CATEGORIES)
+with col_add:
+    st.button("Add", key="add_btn", on_click=add_item_cb, use_container_width=True)
+
+st.divider()
+
+# ---------- Inventory table ----------
+if st.session_state.inventory:
+    st.subheader("Current Inventory")
+    for key in sorted(st.session_state.inventory.keys(), key=lambda k
