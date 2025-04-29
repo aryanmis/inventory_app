@@ -45,9 +45,9 @@ PRODUCERS: Dict[str, Dict[str, Any]] = {
             {"name": "Salami n Cheese Sando", "tag": "Market"},
         ],
     },
-    "Sample Bakery": {
+    "Arbor Teas": {
         "categories": ["Front", "Back", "Freezer"],
-        "default_subject": "Sample Bakery – Inventory",
+        "default_subject": "Arbor Teas – Inventory",
         "default_recipient": "",
         "mainstays": [
             {"name": "Croissant", "tag": "Front"},
