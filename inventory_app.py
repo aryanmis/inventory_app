@@ -266,4 +266,4 @@ if st.button("Send Inventory Report ✉️", key=f"send_{ready}", disabled=not r
             after_txt=msg_after,
         )
     except Exception as exc:
-        st.error(f"Failed to send:
+        st.error(f"Failed to send:")
