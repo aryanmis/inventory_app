@@ -2,15 +2,18 @@
 """
 Inventory Counter & Emailer
 ==========================
-Lightweight Streamlit GUI: add/remove items, reset list, and e‑mail reports with
-custom subject plus optional text **before** *and* **after** the inventory
-table.
+Streamlit GUI to:
+* Add items **with an initial quantity**
+* Adjust quantities inline via **number boxes** or ➕/➖ shortcuts
+* Delete individual rows or clear the whole list
+* Customise subject, intro, outro text
+* Send an e‑mail report using SMTP credentials stored in **st.secrets**
 
-Changelog (2025-04-30)
-----------------------
-* **Feature back:** "Text before table" field returns and is inserted above the
-  table in both plaintext and HTML e‑mails (requested).
-* Keeps secrets‑first SMTP config; no more python‑dotenv dependency.
+2025‑04‑30 ‒ Feature Update
+--------------------------
+* **Inline edit** – each Quantity cell is now a `number_input`; type any value.
+* **Add with quantity** – the add‑item row has a Qty field (defaults to 0).
+* Logic simplified; plus/minus buttons still there for quick bumps.
 """
 
 from __future__ import annotations
@@ -24,40 +27,28 @@ import streamlit as st
 # ─────────────────────────────────────────────────────────────
 # 0.  Configuration & helpers
 # ─────────────────────────────────────────────────────────────
-secrets_cfg = st.secrets.get("smtp", {})  # host, port, user, pass
-
+secrets_cfg = st.secrets.get("smtp", {})
 SMTP_HOST = secrets_cfg.get("host") or os.getenv("SMTP_HOST", "smtp.gmail.com")
 SMTP_PORT = int(secrets_cfg.get("port") or os.getenv("SMTP_PORT", 465))
 SMTP_USER = secrets_cfg.get("user") or os.getenv("SMTP_USER")
 SMTP_PASS = secrets_cfg.get("pass") or os.getenv("SMTP_PASS")
 
 if not all([SMTP_USER, SMTP_PASS]):
-    st.warning(
-        "⚠️  SMTP credentials not found. Configure them in Streamlit **Secrets** "
-        "or set environment variables so e-mail sending works."
-    )
+    st.warning("⚠️  SMTP credentials missing. Set them in Secrets or env vars.")
 
 
 def _nl2br(text: str) -> str:
     return text.replace("\n", "<br>") if text else ""
 
 
-def send_email(
-    recipient: str,
-    inventory: dict[str, int],
-    subject: str = "Inventory Report",
-    before_txt: str = "",
-    after_txt: str = "",
-) -> None:
-    """Compose and send an inventory report via SSL SMTP with optional lead‑in
-    and closing text.
-    """
+def send_email(recipient: str, inventory: dict[str, int], *, subject: str, before: str, after: str) -> None:
+    """Build plain‑text + HTML e‑mail and send via SSL SMTP."""
     msg = EmailMessage()
-    msg["Subject"] = subject or "Inventory Report"
+    msg["Subject"] = subject
     msg["From"] = SMTP_USER
     msg["To"] = recipient
 
-    # ---------------- Build table ----------------
+    # ---- render table ----
     rows_plain = ["Item\tQuantity"] + [f"{k}\t{v}" for k, v in inventory.items()]
     table_plain = "\n".join(rows_plain)
 
@@ -66,31 +57,24 @@ def send_email(
         for k, v in inventory.items()
     )
     table_html = (
-        "<table border='1' cellspacing='0' cellpadding='4'" \
-        " style='border-collapse:collapse;font-family:sans-serif;'>" \
-        "<tr><th style='padding:4px 12px'>Item</th><th>Quantity</th></tr>" \
-        f"{rows_html}</table>"
+        "<table border='1' cellspacing='0' cellpadding='4' style='border-collapse:collapse;font-family:sans-serif;'>"
+        "<tr><th style='padding:4px 12px'>Item</th><th>Qty</th></tr>" + rows_html + "</table>"
     )
 
-    # ---------------- Plain‑text body ----------------
-    plain_parts: list[str] = []
-    if before_txt:
-        plain_parts.append(before_txt.strip())
-    plain_parts.append(table_plain)
-    if after_txt:
-        plain_parts.append(after_txt.strip())
-    msg.set_content("\n\n".join(plain_parts))
+    # ---- plain text body ----
+    parts_plain = [p.strip() for p in (before, table_plain, after) if p.strip()]
+    msg.set_content("\n\n".join(parts_plain))
 
-    # ---------------- HTML body ----------------
-    html_parts: list[str] = []
-    if before_txt:
-        html_parts.append(f"<p>{_nl2br(before_txt.strip())}</p>")
-    html_parts.append(table_html)
-    if after_txt:
-        html_parts.append(f"<p>{_nl2br(after_txt.strip())}</p>")
-    msg.add_alternative("<html><body>" + "\n".join(html_parts) + "</body></html>", subtype="html")
+    # ---- HTML body ----
+    parts_html = []
+    if before.strip():
+        parts_html.append(f"<p>{_nl2br(before.strip())}</p>")
+    parts_html.append(table_html)
+    if after.strip():
+        parts_html.append(f"<p>{_nl2br(after.strip())}</p>")
+    msg.add_alternative("<html><body>" + "\n".join(parts_html) + "</body></html>", subtype="html")
 
-    # ---------------- Send ----------------
+    # ---- send ----
     with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as smtp:
         smtp.login(SMTP_USER, SMTP_PASS)
         smtp.send_message(msg)
@@ -106,18 +90,22 @@ st.title("📋 Inventory Counter")
 if "inventory" not in st.session_state:
     st.session_state.inventory: dict[str, int] = {}
 
-# ---------- Item input ----------
+# ---------- Add‑item row ----------
 
 def add_item_cb() -> None:
-    item = st.session_state.get("new_item", "").strip()
-    if item:
-        st.session_state.inventory.setdefault(item, 1)
+    name = st.session_state.get("new_item", "").strip()
+    qty = int(st.session_state.get("new_qty", 1))
+    if name:
+        st.session_state.inventory[name] = max(0, qty)
         st.session_state["new_item"] = ""
+        st.session_state["new_qty"] = 0
 
-col_item, col_add = st.columns([3, 1])
-with col_item:
-    st.text_input("Add new item", key="new_item", placeholder="e.g. Blueberry Muffin", on_change=add_item_cb)
-with col_add:
+col_name, col_qty, col_btn = st.columns([3, 1, 1])
+with col_name:
+    st.text_input("Item", key="new_item", placeholder="e.g. Blueberry Muffin", on_change=add_item_cb)
+with col_qty:
+    st.number_input("Qty", key="new_qty", min_value=0, value=0, step=1, format="%d")
+with col_btn:
     st.button("Add", on_click=add_item_cb, use_container_width=True)
 
 st.divider()
@@ -127,7 +115,9 @@ if st.session_state.inventory:
     st.subheader("Current Inventory")
     for item in list(st.session_state.inventory.keys()):
         qty = st.session_state.inventory[item]
-        plus_col, minus_col, del_col, item_col, qty_col = st.columns([1, 1, 1, 5, 2])
+        plus_col, minus_col, del_col, item_col, qty_col = st.columns([1, 1, 1, 4, 2])
+
+        # +/- buttons
         if plus_col.button("➕", key=f"plus_{item}"):
             st.session_state.inventory[item] += 1
             st.rerun()
@@ -137,11 +127,17 @@ if st.session_state.inventory:
         if del_col.button("🗑️", key=f"del_{item}"):
             st.session_state.inventory.pop(item, None)
             st.rerun()
+
+        # Name & editable quantity field
         if item in st.session_state.inventory:
             item_col.write(item)
-            qty_col.write(st.session_state.inventory[item])
+            num_key = f"qty_{item}"
+            new_val = qty_col.number_input("", min_value=0, step=1, value=qty, key=num_key)
+            if new_val != qty:
+                st.session_state.inventory[item] = new_val
+
     st.divider()
-    if st.button("Clear list 🗑️", key="clear_all", type="secondary"):
+    if st.button("Clear list 🗑️", type="secondary"):
         st.session_state.inventory.clear()
         st.rerun()
 else:
@@ -150,35 +146,19 @@ else:
 st.divider()
 
 # ---------- E‑mail customisation ----------
-subject_input = st.text_input("E‑mail subject", key="email_subject", placeholder="Inventory Report")
-msg_before = st.text_area("Text before table (optional)", key="msg_before", height=100)
-msg_after = st.text_area("Text after table (optional)", key="msg_after", height=100)
+subject = st.text_input("E‑mail subject", value="Inventory Report")
+msg_before = st.text_area("Text before table (optional)")
+msg_after = st.text_area("Text after table (optional)")
 
 st.divider()
 
-# ---------- E‑mail send ----------
-recipient = st.text_input("Recipient e‑mail", key="recipient", placeholder="manager@example.com")
-
-non_zero_inventory = any(qty > 0 for qty in st.session_state.inventory.values())
-address_entered = bool(recipient.strip())
-can_send = address_entered and non_zero_inventory
-
-# ⚙️  Key depends on *both* the address string and readiness flag so the widget
-# is rebuilt on every keystroke, instantly reflecting the enabled / disabled
-# state without requiring Enter/Tab.
-send_key = f"send_{recipient}_{can_send}"
-
-if st.button("Send Inventory Report ✉️", key=send_key, disabled=not can_send):
+# ---------- Send section ----------
+recipient = st.text_input("Recipient e‑mail")
+ready = recipient.strip() and any(v > 0 for v in st.session_state.inventory.values())
+if st.button("Send Inventory Report ✉️", key=f"send_{recipient}_{ready}", disabled=not ready):
     try:
-        send_email(
-            recipient.strip(),
-            st.session_state.inventory,
-            subject=subject_input.strip() or "Inventory Report",
-            before_txt=msg_before,
-            after_txt=msg_after,
-        )
-    except Exception as exc:
-        st.error(f"Failed to send e‑mail: {exc}")
+        send_email(recipient.strip(), st.session_state.inventory, subject=subject.strip() or "Inventory Report", before=msg_before, after=msg_after)
+    except Exception as e:
+        st.error(f"Failed to send: {e}")
     else:
         st.success("Report sent! 🎉")
-
