@@ -1,18 +1,18 @@
-# inventory_app.py – Streamlit app for quick inventory & email (multi‑category support)
+# inventory_app.py – Streamlit app for quick inventory & email (grouped by category)
 """
 Inventory Counter & Emailer
 ==========================
 Streamlit GUI that lets you
 * **Add items with an initial quantity & tag** (item is created only when you press **Add**)
 * **Same item name can live in several categories** (e.g. Coffee Cups in *Cafe* **and** *Market*)
-* **Edit quantities and tags inline**; tags can be moved between categories and duplicates will auto‑merge
+* **E‑mail now groups items under each category** for easier at‑a‑glance reading
+* **Edit quantities and tags inline**; moving an item merges duplicates automatically
 * **Delete rows** or **clear the list**
 * Customize **e‑mail subject + intro/outro text** and send the table via SMTP
 
-🔄 **v2.0 – 2025‑04‑29**
-• Internal key switched to **name + tag** so duplicates across categories no longer collide.
-• Editing a row’s tag moves/merges it behind the scenes.
-• Add‑item callback now increments quantity if the same *(name, tag)* already exists.
+🔄 **v2.1 – 2025‑04‑29**
+• `send_email()` rebuilt so plain‑text and HTML outputs are grouped by tag.
+• Added subtle grey sub‑headers in the HTML table; plain text gets `=== Category ===` separators.
 """
 
 from __future__ import annotations
@@ -58,31 +58,54 @@ def send_email(
     before_txt: str,
     after_txt: str,
 ) -> None:
-    """Compose and send an inventory e‑mail (plain + HTML)."""
+    """Compose and send an inventory e‑mail (plain + HTML) grouped by category."""
+
+    # ---------- group inventory ----------
+    grouped: Dict[str, list[Tuple[str, int]]] = {cat: [] for cat in CATEGORIES}
+    for k, v in inventory.items():
+        name, tag = split_key(k)
+        grouped[tag].append((name, v["qty"]))
+
+    # ---------- plain‑text table ----------
+    rows_plain: list[str] = []
+    for cat in CATEGORIES:
+        if not grouped[cat]:
+            continue
+        rows_plain.append(f"=== {cat} ===")
+        rows_plain.append("Item\tQuantity")
+        for name, qty in sorted(grouped[cat]):
+            rows_plain.append(f"{name}\t{qty}")
+        rows_plain.append("")  # blank line between categories
+    table_plain = "\n".join(rows_plain).strip()
+
+    # ---------- HTML table ----------
+    rows_html: list[str] = []
+    for cat in CATEGORIES:
+        if not grouped[cat]:
+            continue
+        # Category sub‑header spanning all columns
+        rows_html.append(
+            f"<tr style='background:#f3f3f3;font-weight:bold;'><td colspan='3' style='padding:6px 12px'>{cat}</td></tr>"
+        )
+        for name, qty in sorted(grouped[cat]):
+            rows_html.append(
+                f"<tr><td style='padding:4px 12px'>{name}</td><td align='right' colspan='2'>{qty}</td></tr>"
+            )
+    table_html = (
+        "<table border='1' cellspacing='0' cellpadding='4' style='border-collapse:collapse;font-family:sans-serif;'>"
+        "<tr><th style='padding:4px 12px'>Item</th><th colspan='2'>Qty</th></tr>"
+        + "".join(rows_html)
+        + "</table>"
+    )
+
+    # ---------- craft email message ----------
     msg = EmailMessage()
     msg["Subject"] = subject or "Inventory Report"
     msg["From"] = SMTP_USER
     msg["To"] = recipient
 
-    # --------- render table ---------
-    rows_plain = ["Item\tTag\tQuantity"]
-    for k, v in inventory.items():
-        name, tag = split_key(k)
-        rows_plain.append(f"{name}\t{tag}\t{v['qty']}")
-    table_plain = "\n".join(rows_plain)
-
-    rows_html = "".join(
-        f"<tr><td style='padding:4px 12px'>{split_key(k)[0]}</td><td>{split_key(k)[1]}</td><td align='right'>{v['qty']}</td></tr>"
-        for k, v in inventory.items()
-    )
-    table_html = (
-        "<table border='1' cellspacing='0' cellpadding='4' style='border-collapse:collapse;font-family:sans-serif;'>"
-        "<tr><th style='padding:4px 12px'>Item</th><th>Tag</th><th>Qty</th></tr>"
-        f"{rows_html}</table>"
-    )
-
-    # --------- plain-text body ---------
-    parts_plain = []
+    # Plain‑text body parts
+    parts_plain: list[str] = []
     if before_txt.strip():
         parts_plain.append(before_txt.strip())
     parts_plain.append(table_plain)
@@ -90,8 +113,8 @@ def send_email(
         parts_plain.append(after_txt.strip())
     msg.set_content("\n\n".join(parts_plain))
 
-    # --------- HTML body ---------
-    parts_html = []
+    # HTML body parts
+    parts_html: list[str] = []
     if before_txt.strip():
         parts_html.append(f"<p>{_nl2br(before_txt.strip())}</p>")
     parts_html.append(table_html)
@@ -99,15 +122,16 @@ def send_email(
         parts_html.append(f"<p>{_nl2br(after_txt.strip())}</p>")
     msg.add_alternative("<html><body>" + "\n".join(parts_html) + "</body></html>", subtype="html")
 
-    # --------- send ---------
+    # ---------- send ----------
     with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as smtp:
         smtp.login(SMTP_USER, SMTP_PASS)
         smtp.send_message(msg)
 
 
 # ─────────────────────────────────────────────────────────────
-# 1.  Streamlit UI
+# 1.  Streamlit UI (unchanged below this point)
 # ─────────────────────────────────────────────────────────────
+
 # Use a wide layout so the dropdown stays visible even on smaller screens
 st.set_page_config(page_title="Inventory Counter", page_icon="📋", layout="wide")
 
@@ -135,7 +159,6 @@ def add_item_cb():
     st.session_state["new_qty"] = 0
     st.session_state["new_tag"] = CATEGORIES[0]
 
-# Wider tag column so the dropdown isn’t squeezed off‑screen
 col_name, col_qty, col_tag, col_add = st.columns([3, 1, 3, 1])
 with col_name:
     st.text_input("Item", key="new_item", placeholder="e.g. Blueberry Muffin", label_visibility="visible")
@@ -151,23 +174,20 @@ st.divider()
 # ---------- Inventory table ----------
 if st.session_state.inventory:
     st.subheader("Current Inventory")
-    # Sort by (name, tag) for stable display
     for key in sorted(st.session_state.inventory.keys(), key=lambda k: split_key(k)):
         name, tag = split_key(key)
         qty = st.session_state.inventory[key]["qty"]
 
         plus_col, minus_col, del_col, item_col, qty_col, tag_col = st.columns([1, 1, 1, 4, 2, 3])
 
-        # Buttons & delete
         if plus_col.button("➕", key=f"plus_{key}"):
             st.session_state.inventory[key]["qty"] += 1
         if minus_col.button("➖", key=f"minus_{key}"):
             st.session_state.inventory[key]["qty"] = max(0, qty - 1)
         if del_col.button("🗑️", key=f"del_{key}"):
             st.session_state.inventory.pop(key, None)
-            continue  # Skip rendering deleted row
+            continue
 
-        # Row content (only if not deleted)
         if key not in st.session_state.inventory:
             continue
 
@@ -176,7 +196,7 @@ if st.session_state.inventory:
             label=" ",
             min_value=0,
             step=1,
-            value=st.session_state.inventory[key]["qty"],
+            value=qty,
             key=f"num_{key}",
             label_visibility="collapsed",
         )
@@ -191,14 +211,11 @@ if st.session_state.inventory:
         )
         if new_tag != tag:
             new_key = make_key(name, new_tag)
-            # Merge if target exists
             if new_key in st.session_state.inventory:
                 st.session_state.inventory[new_key]["qty"] += st.session_state.inventory[key]["qty"]
             else:
                 st.session_state.inventory[new_key] = st.session_state.inventory[key]
-            # Remove old key
             st.session_state.inventory.pop(key, None)
-            # Trigger immediate UI refresh
             st.experimental_rerun()
 
     st.divider()
