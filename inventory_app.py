@@ -99,3 +99,4 @@ def add_item_cb() -> None:
         st.session_state["new_item"] = ""
         st.session_state["new_qty"] = 0
 
+st.caption("© 2025 Inventory Tool")
