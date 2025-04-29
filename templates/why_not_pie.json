@@ -2,6 +2,7 @@
   { "name": "Blueberry Muffin",            "tag": "Cafe"   },
   { "name": "Biscotti",               "tag": "Cafe"   },
   { "name": "Biscotti",               "tag": "Frozen" },
+  { "name": "Muffin", "tag":  "Frozen"},
   { "name": "Salami & Cheese Sandwich",  "tag": "Market" },
   { "name": "Hard Boiled Egg",  "tag": "Market"   },
   { "name": "Buckwheat CC Cookie",  "tag": "Goodies" },
