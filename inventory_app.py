@@ -143,6 +143,8 @@ profile = st.selectbox("Producer profile", profile_names, index=profile_names.in
 st.session_state.profile = profile
 CFG, CATEGORIES = PRODUCERS[profile], PRODUCERS[profile]["categories"]
 
+with title_col:
+    st.title(f"📋 Inventory Counter – {profile}")
 
 
 
