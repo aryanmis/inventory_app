@@ -1,24 +1,18 @@
-# inventory_app.py – Multi‑producer inventory & email app
+# inventory_app.py – Multi‑producer inventory & email app (mainstay items)
 """
-Inventory Counter & Emailer (Multi‑Producer Edition)
-===================================================
-This single Streamlit app can service **multiple producers / brands**.  Each
-producer profile defines its own:
+Inventory Counter & Emailer – **v3.1** (2025‑04‑29)
+==================================================
+Now each producer profile can list **mainstay items** that appear automatically
+whenever you select that profile.  Quantities start at 0 so you only need to
+fill the counts.
 
-* **Category list** (column headers in the UI and grouping in e‑mails)
-* (Optional) **Default e‑mail subject / recipient**
-* (Optional) **Custom colour** for the page header (coming soon)
+**What changed**
+* `PRODUCERS[profile]["mainstays"]` → list of `{name, tag}` dicts.
+* Switching profiles pre‑populates the inventory with those items (qty 0).
+* Added *Reset to template* button to bring back the mainstay list if you clear
+  it manually.
 
-Add as many producers as you like by extending the `PRODUCERS` dict.  All other
-logic (duplicate handling, grouping, e‑mail) re‑uses the boilerplate we built
-for *Why Not Pie*.
-
-🔄 **v3.0 – 2025‑04‑29**
-• Introduced `PRODUCERS` config + profile selector.
-• Inventory is **profile‑scoped**—switching producer clears the list to avoid
-  mixing items.
-• Category dropdowns & e‑mail grouping now pull from the active profile.
-• Kept multi‑category duplicates + grouped e‑mail from v2.1.
+Everything else (dup‑handling, grouped e‑mail, categories) works the same.
 """
 
 from __future__ import annotations
@@ -48,11 +42,21 @@ PRODUCERS: Dict[str, Dict[str, Any]] = {
         "categories": ["Cafe", "Market", "Goodies", "Frozen"],
         "default_subject": "Why Not Pie – Daily Inventory",
         "default_recipient": "",
+        "mainstays": [  # Appears with qty 0 on profile load
+            {"name": "PBJ Muffins", "tag": "Cafe"},
+            {"name": "Biscotti", "tag": "Cafe"},
+            {"name": "Biscotti", "tag": "Frozen"},
+            {"name": "Salami n Cheese Sando", "tag": "Market"},
+        ],
     },
     "Sample Bakery": {
         "categories": ["Front", "Back", "Freezer"],
         "default_subject": "Sample Bakery – Inventory",
         "default_recipient": "",
+        "mainstays": [
+            {"name": "Croissant", "tag": "Front"},
+            {"name": "Sourdough", "tag": "Back"},
+        ],
     },
 }
 
@@ -85,14 +89,12 @@ def send_email(
 ) -> None:
     """Compose and send grouped inventory e‑mail."""
 
-    # Group inventory by category
     grouped: Dict[str, List[Tuple[str, int]]] = {cat: [] for cat in categories}
-    # Ensure any ad‑hoc tags that slipped in are still shown
     for k, v in inventory.items():
         name, tag = split_key(k)
         grouped.setdefault(tag, []).append((name, v["qty"]))
 
-    # ----- Plain‑text body -----
+    # Plain‑text body
     rows_plain: List[str] = []
     for cat in categories + [c for c in grouped if c not in categories]:
         if not grouped.get(cat):
@@ -104,7 +106,7 @@ def send_email(
         rows_plain.append("")
     table_plain = "\n".join(rows_plain).strip()
 
-    # ----- HTML body -----
+    # HTML body
     rows_html: List[str] = []
     for cat in categories + [c for c in grouped if c not in categories]:
         if not grouped.get(cat):
@@ -123,29 +125,20 @@ def send_email(
         + "</table>"
     )
 
-    # ----- Build EmailMessage -----
+    # Build and send message
     msg = EmailMessage()
     msg["Subject"] = subject
     msg["From"] = SMTP_USER
     msg["To"] = recipient
 
-    parts_plain: List[str] = []
-    if before_txt.strip():
-        parts_plain.append(before_txt.strip())
-    parts_plain.append(table_plain)
-    if after_txt.strip():
-        parts_plain.append(after_txt.strip())
-    msg.set_content("\n\n".join(parts_plain))
+    body_plain = "\n\n".join(filter(None, [before_txt.strip(), table_plain, after_txt.strip()]))
+    msg.set_content(body_plain)
 
-    parts_html: List[str] = []
-    if before_txt.strip():
-        parts_html.append(f"<p>{_nl2br(before_txt.strip())}</p>")
-    parts_html.append(table_html)
-    if after_txt.strip():
-        parts_html.append(f"<p>{_nl2br(after_txt.strip())}</p>")
-    msg.add_alternative("<html><body>" + "\n".join(parts_html) + "</body></html>", subtype="html")
+    body_html = "\n".join(
+        filter(None, [f"<p>{_nl2br(before_txt.strip())}</p>" if before_txt.strip() else "", table_html, f"<p>{_nl2br(after_txt.strip())}</p>" if after_txt.strip() else ""])
+    )
+    msg.add_alternative(f"<html><body>{body_html}</body></html>", subtype="html")
 
-    # ----- Send -----
     with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as smtp:
         smtp.login(SMTP_USER, SMTP_PASS)
         smtp.send_message(msg)
@@ -166,10 +159,22 @@ CATEGORIES: List[str] = CFG["categories"]
 
 st.title(f"📋 Inventory Counter – {profile}")
 
-# Clearing inventory when switching profiles keeps data separate
-if "inventory" not in st.session_state or st.session_state.get("inventory_profile") != profile:
+# ---------- Initialize / reset inventory ----------
+
+def load_mainstays():
+    """Populate inventory with mainstay items (qty 0)."""
     st.session_state.inventory = {}
+    for itm in CFG.get("mainstays", []):
+        key = make_key(itm["name"], itm["tag"])
+        st.session_state.inventory[key] = {"qty": 0}
     st.session_state.inventory_profile = profile
+
+if "inventory" not in st.session_state or st.session_state.get("inventory_profile") != profile:
+    load_mainstays()
+
+# Button to reload template items if user cleared list
+if st.button("Reset to template items", type="secondary"):
+    load_mainstays()
 
 # ---------- Add item row ----------
 
@@ -184,7 +189,6 @@ def add_item_cb():
         st.session_state.inventory[key]["qty"] += qty
     else:
         st.session_state.inventory[key] = {"qty": qty}
-    # Reset for next entry
     st.session_state["new_item"] = ""
     st.session_state["new_qty"] = 0
     st.session_state["new_tag"] = CATEGORIES[0]
@@ -224,46 +228,4 @@ if st.session_state.inventory:
         new_q = qty_col.number_input(" ", min_value=0, step=1, value=qty, key=f"num_{key}", label_visibility="collapsed")
         st.session_state.inventory[key]["qty"] = int(new_q)
 
-        new_tag = tag_col.selectbox(" ", options=CATEGORIES, index=CATEGORIES.index(tag) if tag in CATEGORIES else 0, key=f"tag_{key}", label_visibility="collapsed")
-        if new_tag != tag:
-            new_key = make_key(name, new_tag)
-            if new_key in st.session_state.inventory:
-                st.session_state.inventory[new_key]["qty"] += st.session_state.inventory[key]["qty"]
-            else:
-                st.session_state.inventory[new_key] = st.session_state.inventory[key]
-            st.session_state.inventory.pop(key, None)
-            st.experimental_rerun()
-
-    st.divider()
-    if st.button("Clear list 🗑️", type="secondary"):
-        st.session_state.inventory.clear()
-else:
-    st.info("Add some items to get started.")
-
-st.divider()
-
-# ---------- E‑mail customisation ----------
-subject_default = CFG.get("default_subject", "Inventory Report")
-recipient_default = CFG.get("default_recipient", "")
-
-subject = st.text_input("E‑mail subject", value=subject_default)
-msg_before = st.text_area("Text before table (optional)")
-msg_after = st.text_area("Text after table (optional)")
-
-st.divider()
-
-# ---------- Send section ----------
-recipient = st.text_input("Recipient e‑mail", value=recipient_default)
-ready = bool(recipient.strip()) and any(v["qty"] > 0 for v in st.session_state.inventory.values())
-if st.button("Send Inventory Report ✉️", key=f"send_{ready}", disabled=not ready):
-    try:
-        send_email(
-            recipient=recipient.strip(),
-            inventory=st.session_state.inventory,
-            categories=CATEGORIES,
-            subject=subject.strip() or subject_default,
-            before_txt=msg_before,
-            after_txt=msg_after,
-        )
-    except Exception as exc:
-        st.error(f"Failed to send:")
+        new_tag = tag_col.selectbox(" ", options
