@@ -1,9 +1,10 @@
 # environment.yml  ── place at the project root
 name: inventory_app           # the environment’s name
 channels:
+  - default               # default channel for conda packages
   - conda-forge               # richer, up-to-date builds
 dependencies:
   - python=3.11               # 3.10–3.12 all work; pick one
   - streamlit=1.33            # UI framework :contentReference[oaicite:0]{index=0}
-  - python-dotenv             # reads .env for SMTP creds :contentReference[oaicite:1]{index=1}
+  - python-dotenv=1.0.1             # reads .env for SMTP creds :contentReference[oaicite:1]{index=1}
   - pip                       # nice to have if you later add pip-only libs
