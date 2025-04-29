@@ -131,7 +131,7 @@ st.set_page_config(
     page_icon="logo.png",          # favicon in the browser tab
     layout="wide",
 )
-
+LOGO_FILE = "logo.png"
 logo_col, title_col = st.columns([1, 8])   # tweak the 1/8 ratio as you like
 with logo_col:
     st.image(LOGO_FILE, width=80)          # width≈80-120 px feels right
