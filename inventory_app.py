@@ -1,16 +1,16 @@
-# inventory_app.py – Streamlit app for quick inventory & email
+# inventory_app.py – Streamlit app for quick inventory & email (with per‑item tags)
 """
 Inventory Counter & Emailer
 ==========================
 Streamlit GUI that lets you
-* **Add items with an initial quantity** (item is created only when you press **Add**)
-* **Edit quantities inline** (type any number) or use ➕/➖ buttons
+* **Add items with an initial quantity & tag** (item is created only when you press **Add**)
+* **Edit quantities and tags inline** or use ➕/➖ buttons
 * **Delete rows** or **clear the list**
 * Customize **e‑mail subject + intro/outro text** and send the table via SMTP
 
-This revision removes all explicit `st.rerun()` calls (Streamlit auto‑reruns on
-widget interaction) and restores the full UI that disappeared after the last
-edit.
+This revision adds a _Tag_ column so each item can be categorised as **Cafe,
+Market, Goodies** or **Frozen** goods.  All explicit `st.rerun()` calls remain
+removed (Streamlit auto‑reruns on widget interaction).
 """
 
 from __future__ import annotations
@@ -18,12 +18,12 @@ from __future__ import annotations
 import os
 import smtplib
 from email.message import EmailMessage
-from typing import Dict
+from typing import Dict, Any
 
 import streamlit as st
 
 # ─────────────────────────────────────────────────────────────
-# 0.  Configuration & helpers
+# 0.  Configuration, constants & helpers
 # ─────────────────────────────────────────────────────────────
 SECRETS = st.secrets.get("smtp", {})  # host, port, user, pass
 SMTP_HOST = SECRETS.get("host") or os.getenv("SMTP_HOST", "smtp.gmail.com")
@@ -34,6 +34,8 @@ SMTP_PASS = SECRETS.get("pass") or os.getenv("SMTP_PASS")
 if not (SMTP_USER and SMTP_PASS):
     st.warning("⚠️  Configure SMTP credentials in Secrets or env vars to enable e‑mail.")
 
+CATEGORIES = ["Cafe", "Market", "Goodies", "Frozen"]  # Allowed tags
+
 
 def _nl2br(txt: str) -> str:
     """Convert newlines to <br> for HTML bodies."""
@@ -42,7 +44,7 @@ def _nl2br(txt: str) -> str:
 
 def send_email(
     recipient: str,
-    inventory: Dict[str, int],
+    inventory: Dict[str, Dict[str, Any]],
     *,
     subject: str,
     before_txt: str,
@@ -55,15 +57,18 @@ def send_email(
     msg["To"] = recipient
 
     # --------- render table ---------
-    rows_plain = ["Item\tQuantity"] + [f"{k}\t{v}" for k, v in inventory.items()]
+    rows_plain = ["Item\tTag\tQuantity"] + [
+        f"{k}\t{v['tag']}\t{v['qty']}" for k, v in inventory.items()
+    ]
     table_plain = "\n".join(rows_plain)
 
     rows_html = "".join(
-        f"<tr><td style='padding:4px 12px'>{k}</td><td align='right'>{v}</td></tr>" for k, v in inventory.items()
+        f"<tr><td style='padding:4px 12px'>{k}</td><td>{v['tag']}</td><td align='right'>{v['qty']}</td></tr>"
+        for k, v in inventory.items()
     )
     table_html = (
         "<table border='1' cellspacing='0' cellpadding='4' style='border-collapse:collapse;font-family:sans-serif;'>"
-        "<tr><th style='padding:4px 12px'>Item</th><th>Qty</th></tr>"
+        "<tr><th style='padding:4px 12px'>Item</th><th>Tag</th><th>Qty</th></tr>"
         f"{rows_html}</table>"
     )
 
@@ -96,27 +101,32 @@ def send_email(
 # ─────────────────────────────────────────────────────────────
 st.set_page_config(page_title="Inventory Counter", page_icon="📋", layout="centered")
 
-st.title("📋 Inventory Counter")
+st.title("📋 Inventory Counter (with Tags)")
 
 if "inventory" not in st.session_state:
-    st.session_state.inventory: Dict[str, int] = {}
+    # Each entry is a dict: {"qty": int, "tag": str}
+    st.session_state.inventory: Dict[str, Dict[str, Any]] = {}
 
-# ---------- Add item row ----------
 # ---------- Add item row ----------
 
 def add_item_cb():
     name = st.session_state.get("new_item", "").strip()
     qty = int(st.session_state.get("new_qty", 0))
+    tag = st.session_state.get("new_tag", CATEGORIES[0])
     if name:
-        st.session_state.inventory[name] = qty
+        st.session_state.inventory[name] = {"qty": qty, "tag": tag}
         st.session_state["new_item"] = ""
         st.session_state["new_qty"] = 0
+        st.session_state["new_tag"] = CATEGORIES[0]
 
-col_name, col_qty, col_add = st.columns([3, 1, 1])
+
+col_name, col_qty, col_tag, col_add = st.columns([3, 1, 2, 1])
 with col_name:
     st.text_input("Item", key="new_item", placeholder="e.g. Blueberry Muffin")
 with col_qty:
     st.number_input("Qty", key="new_qty", min_value=0, value=0, step=1, format="%d")
+with col_tag:
+    st.selectbox("Tag", key="new_tag", options=CATEGORIES)
 with col_add:
     st.button("Add", key="add_btn", on_click=add_item_cb, use_container_width=True)
 
@@ -126,22 +136,32 @@ st.divider()
 if st.session_state.inventory:
     st.subheader("Current Inventory")
     for item in list(st.session_state.inventory.keys()):
-        qty = st.session_state.inventory[item]
-        plus_col, minus_col, del_col, item_col, qty_col = st.columns([1, 1, 1, 4, 2])
+        entry = st.session_state.inventory[item]
+        qty = entry["qty"]
+        tag = entry["tag"]
+
+        plus_col, minus_col, del_col, item_col, qty_col, tag_col = st.columns([1, 1, 1, 4, 2, 3])
 
         if plus_col.button("➕", key=f"plus_{item}"):
-            st.session_state.inventory[item] += 1
+            st.session_state.inventory[item]["qty"] += 1
         if minus_col.button("➖", key=f"minus_{item}"):
-            st.session_state.inventory[item] = max(0, qty - 1)
+            st.session_state.inventory[item]["qty"] = max(0, qty - 1)
         if del_col.button("🗑️", key=f"del_{item}"):
             st.session_state.inventory.pop(item, None)
             continue  # Skip rendering deleted row in this cycle
 
-        # Row content
+        # Row content (only if not deleted)
         if item in st.session_state.inventory:
             item_col.write(item)
-            new_q = qty_col.number_input("", min_value=0, step=1, value=st.session_state.inventory[item], key=f"num_{item}")
-            st.session_state.inventory[item] = int(new_q)
+            new_q = qty_col.number_input(
+                "", min_value=0, step=1, value=st.session_state.inventory[item]["qty"], key=f"num_{item}"
+            )
+            st.session_state.inventory[item]["qty"] = int(new_q)
+
+            new_tag = tag_col.selectbox(
+                "", options=CATEGORIES, index=CATEGORIES.index(tag), key=f"tag_{item}"
+            )
+            st.session_state.inventory[item]["tag"] = new_tag
 
     st.divider()
     if st.button("Clear list 🗑️", type="secondary"):
@@ -160,7 +180,9 @@ st.divider()
 
 # ---------- Send section ----------
 recipient = st.text_input("Recipient e‑mail")
-ready = bool(recipient.strip()) and any(qty > 0 for qty in st.session_state.inventory.values())
+ready = bool(recipient.strip()) and any(
+    entry["qty"] > 0 for entry in st.session_state.inventory.values()
+)
 if st.button("Send Inventory Report ✉️", key=f"send_{ready}", disabled=not ready):
     try:
         send_email(
@@ -174,4 +196,3 @@ if st.button("Send Inventory Report ✉️", key=f"send_{ready}", disabled=not r
         st.error(f"Failed to send: {exc}")
     else:
         st.success("Report sent! 🎉")
-
