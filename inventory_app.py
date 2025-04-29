@@ -126,7 +126,11 @@ def send_email(*, recipient: str, inventory: Dict[str, Dict[str, Any]], categori
 # ─────────────────────────────────────────────────────────────
 # 3.  Streamlit UI
 # ─────────────────────────────────────────────────────────────
-
+st.set_page_config(
+    page_title="Inventory Counter",
+    page_icon="logo.png",          # favicon in the browser tab
+    layout="wide",
+)
 
 
 
@@ -137,11 +141,7 @@ profile = st.selectbox("Producer profile", profile_names, index=profile_names.in
 st.session_state.profile = profile
 CFG, CATEGORIES = PRODUCERS[profile], PRODUCERS[profile]["categories"]
 
-st.set_page_config(
-    page_title="Inventory Counter",
-    page_icon="logo.png",          # favicon in the browser tab
-    layout="wide",
-)
+
 
 # ‼️ Place logo.png in the same folder as inventory_app.py
 LOGO_FILE = "logo.png"             # or a full URL
