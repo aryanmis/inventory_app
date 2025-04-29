@@ -5,17 +5,13 @@ Inventory Counter & Emailer
 Lightweight Streamlit GUI to tally item counts with ➕ / ➖ buttons, delete items,
 reset the whole list, and e‑mail customisable reports.
 
-Changelog (2025‑04‑29 g)
+Changelog (2025‑04‑29 h)
 ------------------------
-* **Bug‑fix:** Delete now works in a *single* click. When you press 🗑️ the page
-  immediately reruns so the row disappears without needing a second click.
-* **Improvement:** `Clear list` likewise performs an instant rerun.
-
-Quick start
------------
-```bash
-streamlit run inventory_app.py
-```
+* **Secrets‑first config:** The app now reads SMTP settings from `st.secrets`
+  (*Streamlit Cloud Secret Manager*) and falls back to classic environment
+  variables when you run locally.  The `python‑dotenv` dependency and
+  `load_dotenv()` call have been removed—you no longer need a `.env` file in
+  production.
 """
 
 from __future__ import annotations
@@ -25,17 +21,23 @@ import smtplib
 from email.message import EmailMessage
 
 import streamlit as st
-from dotenv import load_dotenv
 
 # ─────────────────────────────────────────────────────────────
 # 0.  Configuration & helpers
 # ─────────────────────────────────────────────────────────────
-load_dotenv()
+# Preferred on Streamlit Cloud:
+secrets_cfg = st.secrets.get("smtp", {})  # expects keys: host, port, user, pass
 
-SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
-SMTP_PORT = int(os.getenv("SMTP_PORT", 465))
-SMTP_USER = os.getenv("SMTP_USER")
-SMTP_PASS = os.getenv("SMTP_PASS")
+SMTP_HOST = secrets_cfg.get("host") or os.getenv("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT = int(secrets_cfg.get("port") or os.getenv("SMTP_PORT", 465))
+SMTP_USER = secrets_cfg.get("user") or os.getenv("SMTP_USER")
+SMTP_PASS = secrets_cfg.get("pass") or os.getenv("SMTP_PASS")
+
+if not all([SMTP_USER, SMTP_PASS]):
+    st.warning(
+        "⚠️  SMTP credentials not found. Configure them in Streamlit **Secrets** "
+        "or set environment variables so e‑mail sending works."
+    )
 
 
 def _nl2br(text: str) -> str:
@@ -64,7 +66,8 @@ def send_email(
         for k, v in inventory.items()
     )
     table_html = (
-        "<table border='1' cellspacing='0' cellpadding='4' style='border-collapse:collapse;font-family:sans-serif;'>"
+        "<table border='1' cellspacing='0' cellpadding='4' "
+        "style='border-collapse:collapse;font-family:sans-serif;'>"
         "<tr><th style='padding:4px 12px'>Item</th><th>Quantity</th></tr>"
         f"{rows_html}</table>"
     )
@@ -104,8 +107,8 @@ def add_item_cb() -> None:
     """Add textbox value to inventory (if non‑blank) and clear box."""
     item = st.session_state.get("new_item", "").strip()
     if item:
-        st.session_state.inventory.setdefault(item, 1)  # start at 0
-        st.session_state["new_item"] = ""  # clear textbox
+        st.session_state.inventory.setdefault(item, 0)
+        st.session_state["new_item"] = ""
 
 # ---------- Item creation row ----------
 col_item, col_add = st.columns([3, 1])
@@ -137,15 +140,13 @@ if st.session_state.inventory:
             st.rerun()
         if del_col.button("🗑️", key=f"del_{item}"):
             st.session_state.inventory.pop(item, None)
-            st.rerun()  # instant refresh so row disappears immediately
+            st.rerun()
 
-        # Only render if item still exists (prevents flash on delete)
         if item in st.session_state.inventory:
             item_col.write(item)
             qty_col.write(st.session_state.inventory[item])
 
     st.divider()
-    # Clear‑all button
     if st.button("Clear list 🗑️", key="clear_all", type="secondary"):
         st.session_state.inventory.clear()
         st.rerun()
@@ -180,3 +181,5 @@ if st.button("Send Inventory Report ✉️", key=send_key, disabled=not can_send
     else:
         st.success("Report sent! 🎉")
 
+# Footer
+st.caption("© 2025 – Lightweight Bakery Tools • Built with Streamlit")
