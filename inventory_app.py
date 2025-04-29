@@ -94,9 +94,9 @@ if "inventory" not in st.session_state:
 
 def add_item_cb() -> None:
     name = st.session_state.get("new_item", "").strip()
-    qty = int(st.session_state.get("new_qty", 1))
+    qty = int(st.session_state.get("new_qty", 0))
     if name:
-        st.session_state.inventory[name] = max(1, qty)
+        st.session_state.inventory[name] = max(0, qty)
         st.session_state["new_item"] = ""
         st.session_state["new_qty"] = 0
 
