@@ -158,9 +158,17 @@ st.divider()
 
 # ---------- E‑mail send ----------
 recipient = st.text_input("Recipient e‑mail", key="recipient", placeholder="manager@example.com")
+
 non_zero_inventory = any(qty > 0 for qty in st.session_state.inventory.values())
-can_send = bool(recipient.strip()) and non_zero_inventory
-if st.button("Send Inventory Report ✉️", key=f"send_{can_send}", disabled=not can_send):
+address_entered = bool(recipient.strip())
+can_send = address_entered and non_zero_inventory
+
+# ⚙️  Key depends on *both* the address string and readiness flag so the widget
+# is rebuilt on every keystroke, instantly reflecting the enabled / disabled
+# state without requiring Enter/Tab.
+send_key = f"send_{recipient}_{can_send}"
+
+if st.button("Send Inventory Report ✉️", key=send_key, disabled=not can_send):
     try:
         send_email(
             recipient.strip(),
