@@ -1,11 +1,6 @@
-{
-        "categories": ["Cafe", "Market", "Goodies", "Frozen"],
-        "default_subject": "Why Not Pie – Daily Inventory",
-        "default_recipient": "",
-        "mainstays": [
-            {"name": "PBJ Muffins", "tag": "Cafe"},
-            {"name": "Biscotti", "tag": "Cafe"},
-            {"name": "Biscotti", "tag": "Frozen"},
-            {"name": "Salami n Cheese Sando", "tag": "Market"},
-        ]
-    }
+[
+  { "name": "PBJ Muffins",            "tag": "Cafe"   },
+  { "name": "Biscotti",               "tag": "Cafe"   },
+  { "name": "Biscotti",               "tag": "Frozen" },
+  { "name": "Salami n Cheese Sando",  "tag": "Market" }
+]
