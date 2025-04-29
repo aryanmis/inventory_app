@@ -198,8 +198,8 @@ if st.session_state.inventory:
             name, tag = split_key(key);
             qty = st.session_state.inventory[key]["qty"]
             p, m, d, nm, qt, tg = st.columns([1, 1, 1, 4, 2, 3])
-            if p.button("➕", key=f"plus_{key}"): st.session_state.inventory[key]["qty"] += 1
-            if m.button("➖", key=f"minus_{key}"): st.session_state.inventory[key]["qty"] = max(0, qty - 1)
+            #if p.button("➕", key=f"plus_{key}"): st.session_state.inventory[key]["qty"] += 1
+            #if m.button("➖", key=f"minus_{key}"): st.session_state.inventory[key]["qty"] = max(0, qty - 1)
             if d.button("🗑️", key=f"del_{key}"): st.session_state.inventory.pop(key); st.experimental_rerun()
             nm.write(name)
             new_q = qt.number_input(" ", value=qty, min_value=0, step=1, key=f"num_{key}", label_visibility="collapsed")
