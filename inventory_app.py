@@ -132,7 +132,9 @@ st.set_page_config(
     layout="wide",
 )
 
-
+logo_col, title_col = st.columns([1, 8])   # tweak the 1/8 ratio as you like
+with logo_col:
+    st.image(LOGO_FILE, width=80)          # width≈80-120 px feels right
 
 
 # Profile selector
@@ -143,15 +145,10 @@ CFG, CATEGORIES = PRODUCERS[profile], PRODUCERS[profile]["categories"]
 
 
 
-# ‼️ Place logo.png in the same folder as inventory_app.py
-LOGO_FILE = "logo.png"             # or a full URL
+
 
 # One narrow column for the logo, one wide for the title
-logo_col, title_col = st.columns([1, 8])   # tweak the 1/8 ratio as you like
-with logo_col:
-    st.image(LOGO_FILE, width=80)          # width≈80-120 px feels right
-with title_col:
-    st.title(f" Inventory Counter – {profile}")
+
 
 
 
