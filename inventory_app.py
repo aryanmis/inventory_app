@@ -46,13 +46,10 @@ PRODUCERS: Dict[str, Dict[str, Any]] = {
         ],
     },
     "Arbor Teas": {
-        "categories": ["Front", "Back", "Freezer"],
+        "categories": ["Market", "Cafe", "Freezer"],
         "default_subject": "Arbor Teas – Inventory",
         "default_recipient": "",
-        "mainstays": [
-            {"name": "Croissant", "tag": "Front"},
-            {"name": "Sourdough", "tag": "Back"},
-        ],
+       "mainstays": []
     },
 }
 
