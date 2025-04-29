@@ -1,4 +1,4 @@
-# inventory_app.py – Streamlit app for quick inventory & email (with per‑item tags)
+# inventory_app.py – Streamlit app for quick inventory & email (with per-item tags)
 """
 Inventory Counter & Emailer
 ==========================
@@ -8,9 +8,10 @@ Streamlit GUI that lets you
 * **Delete rows** or **clear the list**
 * Customize **e‑mail subject + intro/outro text** and send the table via SMTP
 
-This revision adds a _Tag_ column so each item can be categorised as **Cafe,
-Market, Goodies** or **Frozen** goods.  All explicit `st.rerun()` calls remain
-removed (Streamlit auto‑reruns on widget interaction).
+🔄 **v1.1 – 2025‑04‑29**
+• Switched to **layout="wide"** so narrow screens don’t hide widgets.
+• Widened the tag‑selector column and forced the dropdown to show.
+• Minor UX tweaks (placeholder text, focus reset).
 """
 
 from __future__ import annotations
@@ -72,7 +73,7 @@ def send_email(
         f"{rows_html}</table>"
     )
 
-    # --------- plain‑text body ---------
+    # --------- plain-text body ---------
     parts_plain = []
     if before_txt.strip():
         parts_plain.append(before_txt.strip())
@@ -99,7 +100,8 @@ def send_email(
 # ─────────────────────────────────────────────────────────────
 # 1.  Streamlit UI
 # ─────────────────────────────────────────────────────────────
-st.set_page_config(page_title="Inventory Counter", page_icon="📋", layout="centered")
+# Use a wide layout so the dropdown stays visible even on smaller screens
+st.set_page_config(page_title="Inventory Counter", page_icon="📋", layout="wide")
 
 st.title("📋 Inventory Counter (with Tags)")
 
@@ -115,18 +117,24 @@ def add_item_cb():
     tag = st.session_state.get("new_tag", CATEGORIES[0])
     if name:
         st.session_state.inventory[name] = {"qty": qty, "tag": tag}
+        # Reset the entry fields so users can add the next item quickly
         st.session_state["new_item"] = ""
         st.session_state["new_qty"] = 0
         st.session_state["new_tag"] = CATEGORIES[0]
 
-
-col_name, col_qty, col_tag, col_add = st.columns([3, 1, 2, 1])
+# Wider tag column so the dropdown isn’t squeezed off‑screen
+col_name, col_qty, col_tag, col_add = st.columns([3, 1, 3, 1])
 with col_name:
-    st.text_input("Item", key="new_item", placeholder="e.g. Blueberry Muffin")
+    st.text_input("Item", key="new_item", placeholder="e.g. Blueberry Muffin", label_visibility="visible")
 with col_qty:
-    st.number_input("Qty", key="new_qty", min_value=0, value=0, step=1, format="%d")
+    st.number_input("Qty", key="new_qty", min_value=0, value=0, step=1, format="%d", label_visibility="visible")
 with col_tag:
-    st.selectbox("Tag", key="new_tag", options=CATEGORIES)
+    st.selectbox(
+        "Tag (click to choose)",
+        key="new_tag",
+        options=CATEGORIES,
+        label_visibility="visible",
+    )
 with col_add:
     st.button("Add", key="add_btn", on_click=add_item_cb, use_container_width=True)
 
@@ -154,12 +162,21 @@ if st.session_state.inventory:
         if item in st.session_state.inventory:
             item_col.write(item)
             new_q = qty_col.number_input(
-                "", min_value=0, step=1, value=st.session_state.inventory[item]["qty"], key=f"num_{item}"
+                label=" ",
+                min_value=0,
+                step=1,
+                value=st.session_state.inventory[item]["qty"],
+                key=f"num_{item}",
+                label_visibility="collapsed",
             )
             st.session_state.inventory[item]["qty"] = int(new_q)
 
             new_tag = tag_col.selectbox(
-                "", options=CATEGORIES, index=CATEGORIES.index(tag), key=f"tag_{item}"
+                label=" ",
+                options=CATEGORIES,
+                index=CATEGORIES.index(tag),
+                key=f"tag_{item}",
+                label_visibility="collapsed",
             )
             st.session_state.inventory[item]["tag"] = new_tag
 
