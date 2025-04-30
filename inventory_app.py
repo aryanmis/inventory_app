@@ -33,7 +33,7 @@ SMTP_PASS = SECRETS.get("pass") or os.getenv("SMTP_PASS")
 if not (SMTP_USER and SMTP_PASS):
     st.warning("⚠️  Configure SMTP credentials in Secrets or env vars to enable e‑mail.")
 
-now = datetime.date.today()
+now = datetime.now()
 form_now = now.strftime("%m.%d.%y")
 PRODUCERS: Dict[str, Dict[str, Any]] = {
     "Why Not Pie": {
