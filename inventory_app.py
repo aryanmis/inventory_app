@@ -11,7 +11,7 @@ Major change
 """
 
 from __future__ import annotations
-
+import datetime
 import json
 import os
 import smtplib
@@ -33,11 +33,13 @@ SMTP_PASS = SECRETS.get("pass") or os.getenv("SMTP_PASS")
 if not (SMTP_USER and SMTP_PASS):
     st.warning("⚠️  Configure SMTP credentials in Secrets or env vars to enable e‑mail.")
 
+now = datetime.now()
+form_now = now.strftime("%m.%d.%y")
 PRODUCERS: Dict[str, Dict[str, Any]] = {
     "Why Not Pie": {
         "categories": ["Cafe", "Market", "Goodies", "Frozen"],
-        "default_subject": "Why Not Pie – Daily Inventory",
-        "default_recipient": "",
+        "default_subject": "WNP Inventory " + form_now,
+        "default_recipient": "janice@whynotpie.com",
         "mainstays": [
             {"name": "PBJ Muffins", "tag": "Cafe"},
             {"name": "Biscotti", "tag": "Cafe"},
@@ -47,7 +49,7 @@ PRODUCERS: Dict[str, Dict[str, Any]] = {
     },
     "Arbor Teas": {
         "categories": ["Market", "Cafe", "Freezer"],
-        "default_subject": "Arbor Teas – Inventory",
+        "default_subject": "Arbor Teas Inventory " + form_now,
         "default_recipient": "",
        "mainstays": []
     },
