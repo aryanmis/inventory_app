@@ -39,7 +39,7 @@ PRODUCERS: Dict[str, Dict[str, Any]] = {
     "Why Not Pie": {
         "categories": ["Cafe", "Market", "Goodies", "Frozen"],
         "default_subject": "WNP Inventory " + form_now,
-        "default_recipient": "janice@whynotpie.com",
+        "default_recipient": "",
         "mainstays": [
             {"name": "PBJ Muffins", "tag": "Cafe"},
             {"name": "Biscotti", "tag": "Cafe"},
@@ -92,6 +92,7 @@ _nl2br = lambda s: s.replace("\n", "<br>") if s else ""
 # ─────────────────────────────────────────────────────────────
 
 def send_email(*, recipient: str, inventory: Dict[str, Dict[str, Any]], categories: List[str], subject: str, before_txt: str, after_txt: str) -> None:
+    inventory = {k: v for k, v in inventory.items() if v["qty"] > 0}
     grouped: Dict[str, List[Tuple[str, int]]] = {cat: [] for cat in categories}
     for k, v in inventory.items():
         name, tag = split_key(k)
