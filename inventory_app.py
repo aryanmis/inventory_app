@@ -161,6 +161,7 @@ with title_col:
 if "inventory" not in st.session_state or st.session_state.get("inventory_profile") != profile:
     st.session_state.inventory = {make_key(itm["name"], itm.get("tag", CATEGORIES[0])): {"qty": 0} for itm in load_template(profile)}
     st.session_state.inventory_profile = profile
+    st.rerun()
 
 # Template buttons
 col_reset, col_save = st.columns([1, 1])
