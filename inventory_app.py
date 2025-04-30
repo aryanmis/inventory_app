@@ -197,19 +197,20 @@ if st.session_state.inventory:
         for key in sorted(cat_keys, key=lambda k: split_key(k)[0].lower()):
             name, tag = split_key(key);
             qty = st.session_state.inventory[key]["qty"]
-            p, m, d, nm, qt, tg = st.columns([1, 1, 1, 4, 2, 3])
-            #if p.button("➕", key=f"plus_{key}"): st.session_state.inventory[key]["qty"] += 1
-            #if m.button("➖", key=f"minus_{key}"): st.session_state.inventory[key]["qty"] = max(0, qty - 1)
-            if d.button("🗑️", key=f"del_{key}"): st.session_state.inventory.pop(key); st.experimental_rerun()
+            (sp, d, nm, qt, tg) = st.columns([1, 1, 4, 2, 3])
+
+            if d.button("🗑️", key=f"del_{key}"): st.session_state.inventory.pop(key); st.rerun()
             nm.write(name)
             new_q = qt.number_input(" ", value=qty, min_value=0, step=1, key=f"num_{key}", label_visibility="collapsed")
             st.session_state.inventory[key]["qty"] = int(new_q)
+            if new_q != qty:
+                st.rerun()
             new_tag = tg.selectbox(" ", options=CATEGORIES, index=CATEGORIES.index(tag), key=f"tag_{key}", label_visibility="collapsed")
             if new_tag != tag:
                 new_key = make_key(name, new_tag)
                 st.session_state.inventory.setdefault(new_key, {"qty": 0})["qty"] += st.session_state.inventory[key]["qty"]
                 st.session_state.inventory.pop(key);
-                st.experimental_rerun()
+                st.rerun()
     st.divider()
     if st.button("Clear list 🗑️", type="secondary"): st.session_state.inventory.clear()
 else:
