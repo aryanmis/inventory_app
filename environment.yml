@@ -1,0 +1,6 @@
+# environment.yml  ── place at the project root
+name: inventory_app           # the environment’s name
+channels:
+  - conda-forge               # richer, up-to-date builds
+dependencies:
+  - datetime                # nice to have if you later add pip-only libs
