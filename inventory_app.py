@@ -202,9 +202,10 @@ if st.session_state.inventory:
             if d.button("🗑️", key=f"del_{key}"): st.session_state.inventory.pop(key); st.rerun()
             nm.write(name)
             new_q = qt.number_input(" ", value=qty, min_value=0, step=1, key=f"num_{key}", label_visibility="collapsed")
-            st.session_state.inventory[key]["qty"] = int(new_q)
             if new_q != qty:
+                st.session_state.inventory[key]["qty"] = int(new_q)
                 st.rerun()
+
             new_tag = tg.selectbox(" ", options=CATEGORIES, index=CATEGORIES.index(tag), key=f"tag_{key}", label_visibility="collapsed")
             if new_tag != tag:
                 new_key = make_key(name, new_tag)
