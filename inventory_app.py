@@ -908,7 +908,7 @@ def page_count() -> None:
                     st.caption(" ")
 
     st.divider()
-    st.markdown("## Send Report (refined)")
+    st.markdown("## Send Report")
 
     grouped_rows = build_grouped_report_rows(producer_id=producer_id, count_id=count_id)
 
