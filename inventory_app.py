@@ -27,6 +27,44 @@ DB_PATH = os.environ.get("INVENTORY_DB_PATH", "inventory.db")
 st.set_page_config(page_title=APP_TITLE, layout="wide")
 st.title(APP_TITLE)
 
+# --- UI CSS fixes (buttons, number inputs, wrapping) ---
+st.markdown(
+    """
+    <style>
+      /* Prevent button label wrapping (fixes "Delet e") */
+      .stButton > button {
+        white-space: nowrap !important;
+      }
+
+      /* Make small buttons look consistent (quick +/- buttons) */
+      .stButton > button {
+        min-height: 44px;
+        padding: 0.35rem 0.65rem;
+        border-radius: 10px;
+      }
+
+      /* Make column-contained buttons actually fill their column cleanly */
+      .stButton > button {
+        width: 100%;
+      }
+
+      /* Tighten number input width so it doesn't look like a giant slider */
+      div[data-testid="stNumberInput"] {
+        max-width: 180px;
+      }
+      div[data-testid="stNumberInput"] input {
+        text-align: center;
+        font-weight: 600;
+      }
+
+      /* Reduce vertical whitespace between item rows */
+      div[data-testid="stHorizontalBlock"] {
+        gap: 0.75rem;
+      }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Database helpers
@@ -511,18 +549,21 @@ def confirm_button(key: str, label: str, confirm_label: str = "Confirm", cancel_
         st.session_state[state_key] = False
 
     if not st.session_state[state_key]:
-        if st.button(label, key=f"{key}__btn"):
+        # Give the first button enough room
+        if st.button(label, key=f"{key}__btn", use_container_width=False):
             st.session_state[state_key] = True
             st.rerun()
         return False
 
-    cols = st.columns([1, 1, 6])
+    # Wider, fixed layout so "Delete" never wraps
+    cols = st.columns([2.2, 2.2, 10], vertical_alignment="center")
     did_confirm = False
+
     with cols[0]:
-        if st.button(confirm_label, key=f"{key}__confirm"):
+        if st.button(confirm_label, key=f"{key}__confirm", use_container_width=True):
             did_confirm = True
     with cols[1]:
-        if st.button(cancel_label, key=f"{key}__cancel"):
+        if st.button(cancel_label, key=f"{key}__cancel", use_container_width=True):
             st.session_state[state_key] = False
             st.rerun()
 
@@ -531,6 +572,7 @@ def confirm_button(key: str, label: str, confirm_label: str = "Confirm", cancel_
         return True
 
     return False
+
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -782,6 +824,35 @@ def page_count() -> None:
     producer_id, producer = require_producer_selected()
     page_header("Count", f"Manual weekly count for **{producer['name']}** (tabs generated from template).")
 
+    # --- CSS just for this page (safe to include even if you also added global CSS) ---
+    st.markdown(
+        """
+        <style>
+          /* Prevent button text wrapping (fixes "Delet e") */
+          .stButton > button { white-space: nowrap !important; }
+
+          /* Make small buttons consistent and not too tall */
+          .stButton > button {
+            min-height: 44px;
+            padding: 0.35rem 0.65rem;
+            border-radius: 10px;
+            width: 100%;
+          }
+
+          /* Keep qty number input compact */
+          div[data-testid="stNumberInput"] { max-width: 180px; }
+          div[data-testid="stNumberInput"] input {
+            text-align: center;
+            font-weight: 700;
+          }
+
+          /* Slightly reduce row whitespace */
+          div[data-testid="stHorizontalBlock"] { gap: 0.75rem; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
     sections = list_sections(producer_id, active_only=True)
     if not sections:
         st.info("No sections yet. Go to **Template Builder** to create tabs/sections.")
@@ -801,7 +872,8 @@ def page_count() -> None:
 
     lines = load_count_lines(count_id)
 
-    top = st.columns([2, 2, 2, 4], vertical_alignment="center")
+    # --- Header actions (no cramped buttons) ---
+    top = st.columns([2.2, 2.2, 2.2, 5.4], vertical_alignment="center")
     with top[0]:
         st.metric("Count status", count_row["status"])
     with top[1]:
@@ -811,14 +883,14 @@ def page_count() -> None:
         st.caption("Updated")
         st.write(count_row["updated_at"])
     with top[3]:
-        cA, cB = st.columns(2)
-        with cA:
-            if st.button("Mark complete ✅"):
+        a, b, c = st.columns([1.4, 1.6, 7], vertical_alignment="center")
+        with a:
+            if st.button("Mark complete ✅", use_container_width=True):
                 set_count_status(count_id, "completed")
                 st.success("Marked complete.")
                 st.rerun()
-        with cB:
-            if st.button("Start new count 🆕"):
+        with b:
+            if st.button("Start new count 🆕", use_container_width=True):
                 # Complete current (if not already), then create a fresh count immediately
                 if count_row["status"] != "completed":
                     set_count_status(count_id, "completed")
@@ -828,9 +900,13 @@ def page_count() -> None:
 
     st.divider()
 
-    search = st.text_input("Search items (optional)", placeholder="Type to filter item names across tabs…").strip().lower()
+    # --- Search ---
+    search = st.text_input(
+        "Search items (optional)",
+        placeholder="Type to filter item names across tabs…",
+    ).strip().lower()
 
-    # Inline add missing item
+    # --- Inline add missing item (persists) ---
     with st.expander("Add missing item (persists for future counts)", expanded=False):
         with st.form("inline_add_item"):
             sec_label = [s["name"] for s in sections]
@@ -838,8 +914,8 @@ def page_count() -> None:
             chosen = st.selectbox("Section", sec_label, index=0)
             chosen_id = sec_ids[sec_label.index(chosen)]
             nm = st.text_input("Item name *", placeholder="New item name")
-            unit = st.text_input("Unit (optional)")
-            notes = st.text_input("Notes (optional)")
+            unit = st.text_input("Unit (optional)", placeholder="each / case / lb / tray")
+            notes = st.text_input("Notes (optional)", placeholder="Where stored / how to count")
             ok = st.form_submit_button("Add item")
         if ok:
             if not nm.strip():
@@ -849,12 +925,14 @@ def page_count() -> None:
                 st.success("Item added.")
                 st.rerun()
 
+    # --- Tabs ---
     tab_names = [s["name"] for s in sections]
     tabs = st.tabs(tab_names)
 
     for tab, section in zip(tabs, sections):
         sid = int(section["id"])
         items = items_by_section.get(sid, [])
+
         if search:
             items = [it for it in items if search in it["name"].lower()]
 
@@ -864,11 +942,14 @@ def page_count() -> None:
                 st.caption("No matching items in this tab.")
                 continue
 
+            # Render each item row
             for it in items:
                 item_id = int(it["id"])
                 curr = int(lines.get(item_id, 0))
 
-                cols = st.columns([5, 2, 2, 3], vertical_alignment="center")
+                # Better proportions: name | quick buttons | qty | spacer
+                cols = st.columns([6, 3, 2, 1], vertical_alignment="center")
+
                 with cols[0]:
                     label = it["name"]
                     if it["unit"].strip():
@@ -878,17 +959,18 @@ def page_count() -> None:
                         st.caption(it["notes"])
 
                 with cols[1]:
-                    b1, b2, b3, b4 = st.columns(4)
-                    if b1.button("+1", key=f"p1_{count_id}_{item_id}"):
+                    # Four equal square-ish quick buttons
+                    b1, b2, b3, b4 = st.columns([1, 1, 1, 1])
+                    if b1.button("+1", key=f"p1_{count_id}_{item_id}", use_container_width=True):
                         upsert_count_line(count_id, item_id, curr + 1)
                         st.rerun()
-                    if b2.button("+5", key=f"p5_{count_id}_{item_id}"):
+                    if b2.button("+5", key=f"p5_{count_id}_{item_id}", use_container_width=True):
                         upsert_count_line(count_id, item_id, curr + 5)
                         st.rerun()
-                    if b3.button("-1", key=f"m1_{count_id}_{item_id}"):
+                    if b3.button("-1", key=f"m1_{count_id}_{item_id}", use_container_width=True):
                         upsert_count_line(count_id, item_id, max(0, curr - 1))
                         st.rerun()
-                    if b4.button("0", key=f"z_{count_id}_{item_id}"):
+                    if b4.button("0", key=f"z_{count_id}_{item_id}", use_container_width=True):
                         upsert_count_line(count_id, item_id, 0)
                         st.rerun()
 
@@ -905,14 +987,14 @@ def page_count() -> None:
                         upsert_count_line(count_id, item_id, int(new_qty))
 
                 with cols[3]:
-                    st.caption(" ")
+                    st.caption("")  # spacer
 
     st.divider()
     st.markdown("## Send Report")
 
     grouped_rows = build_grouped_report_rows(producer_id=producer_id, count_id=count_id)
 
-    default_subject = f"{producer['name']} {producer['default_subject_prefix']} {dt.date.today().strftime('%m.%d.%y')}"
+    default_subject = f"{producer['default_subject_prefix']} {producer['name']} {dt.date.today().strftime('%m.%d.%y')}"
     subject = st.text_input("Email subject", value=default_subject)
     recipient = st.text_input("Recipient email", value=producer["default_recipient"])
     before_txt = st.text_area("Text before report (optional)", height=80)
@@ -935,6 +1017,7 @@ def page_count() -> None:
             st.error(f"Failed to send: {exc}")
         else:
             st.success("Report sent!")
+
 
 
 def page_history() -> None:
