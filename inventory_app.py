@@ -22,7 +22,8 @@ from email.mime.text import MIMEText
 # ──────────────────────────────────────────────────────────────────────────────
 
 APP_TITLE = "Inventory App"
-DB_PATH = os.environ.get("INVENTORY_DB_PATH", "inventory.db")
+DB_PATH = os.environ.get("INVENTORY_DB_PATH", os.path.expanduser("~/inventory_app/inventory.db"))
+os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 
 st.set_page_config(page_title=APP_TITLE, layout="wide")
 st.title(APP_TITLE)
