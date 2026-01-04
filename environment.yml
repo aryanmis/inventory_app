@@ -3,4 +3,9 @@ name: inventory_app           # the environment’s name
 channels:
   - conda-forge               # richer, up-to-date builds
 dependencies:
-  - datetime                # nice to have if you later add pip-only libs
+  - datetime
+  - python=3.11
+  - pip
+  - pip:
+      - streamlit
+      - psycopg2-binary
