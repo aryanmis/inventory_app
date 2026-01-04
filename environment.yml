@@ -4,8 +4,8 @@ channels:
   - conda-forge               # richer, up-to-date builds
 dependencies:
   - datetime
-  - python=3.11
+  - python=3.12
   - pip
   - pip:
       - streamlit
-      - psycopg2-binary
+      - psycopg2
