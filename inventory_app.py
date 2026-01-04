@@ -424,7 +424,7 @@ def send_email_report(
         grouped_rows: List[Tuple[str, List[Tuple[str, int]]]],
 ) -> None:
     smtp_host = os.environ.get("SMTP_HOST") or st.secrets.get("SMTP_HOST", "")
-    smtp_port = int(os.environ.get("SMTP_PORT") or st.secrets.get("SMTP_PORT", "587"))
+    smtp_port_raw = os.environ.get("SMTP_PORT") or st.secrets.get("SMTP_PORT", "587")
     smtp_user = os.environ.get("SMTP_USER") or st.secrets.get("SMTP_USER", "")
     smtp_pass = os.environ.get("SMTP_PASS") or st.secrets.get("SMTP_PASS", "")
     smtp_from = os.environ.get("SMTP_FROM") or st.secrets.get("SMTP_FROM", "") or smtp_user
@@ -432,7 +432,12 @@ def send_email_report(
     if not (smtp_host and smtp_user and smtp_pass and smtp_from):
         raise RuntimeError("Missing SMTP credentials in secrets/env (SMTP_HOST/PORT/USER/PASS[/FROM]).")
 
-    # Plain text (no zeros, no empty sections)
+    try:
+        smtp_port = int(smtp_port_raw)
+    except Exception:
+        smtp_port = 587
+
+    # Build plain text
     lines: List[str] = []
     if before_txt.strip():
         lines.append(before_txt.strip())
@@ -452,7 +457,7 @@ def send_email_report(
 
     body_plain = "\n".join(lines).strip()
 
-    # HTML
+    # Build HTML
     html_parts: List[str] = []
     if before_txt.strip():
         html_parts.append(f"<p>{before_txt.strip().replace('\\n', '<br/>')}</p>")
@@ -491,10 +496,24 @@ def send_email_report(
     msg.attach(MIMEText(body_plain, "plain", "utf-8"))
     msg.attach(MIMEText(body_html, "html", "utf-8"))
 
-    with smtplib.SMTP(smtp_host, smtp_port) as server:
-        server.starttls()
-        server.login(smtp_user, smtp_pass)
-        server.sendmail(smtp_from, [recipient.strip()], msg.as_string())
+    # Connect robustly
+    timeout_s = 20
+
+    if smtp_port == 465:
+        # SSL/TLS from the start
+        with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=timeout_s) as server:
+            server.ehlo()
+            server.login(smtp_user, smtp_pass)
+            server.sendmail(smtp_from, [recipient.strip()], msg.as_string())
+    else:
+        # STARTTLS (typical 587)
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=timeout_s) as server:
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
+            server.login(smtp_user, smtp_pass)
+            server.sendmail(smtp_from, [recipient.strip()], msg.as_string())
+
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -805,7 +824,33 @@ def page_template_builder() -> None:
 
 def page_count() -> None:
     producer_id, producer = require_producer_selected()
-    page_header("Count", f"Manual weekly count for **{producer['name']}** (tabs generated from template).")
+    page_header("Count", f"Manual weekly count for **{producer['name']}**.")
+
+    # Page-only CSS: fixes header button text fitting + consistent sizing
+    st.markdown(
+        """
+        <style>
+          /* Keep button labels on one line and shrink font slightly so it always fits */
+          .stButton > button {
+            white-space: nowrap !important;
+            min-height: 44px;
+            padding: 0.25rem 0.7rem !important;
+            border-radius: 10px;
+            width: 100%;
+            font-size: 0.95rem !important;
+            line-height: 1.1 !important;
+          }
+
+          /* Compact number inputs so they don't become giant */
+          div[data-testid="stNumberInput"] { max-width: 160px; }
+          div[data-testid="stNumberInput"] input { text-align: center; font-weight: 700; }
+
+          /* Reduce horizontal spacing between columns a bit */
+          div[data-testid="stHorizontalBlock"] { gap: 0.65rem; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
     sections = list_sections(producer_id, active_only=True)
     if not sections:
@@ -823,20 +868,22 @@ def page_count() -> None:
         st.error("Could not load count.")
         st.stop()
 
+    # Always reload lines fresh (don’t rely on stale local dict after reruns)
     lines = load_count_lines(count_id)
 
-    # header with stable button sizing
-    top = st.columns([2.2, 2.2, 2.2, 6.4], vertical_alignment="center")
+    # Header actions: widen buttons so text fits reliably
+    top = st.columns([2.0, 2.0, 2.0, 8.0], vertical_alignment="center")
     with top[0]:
-        st.metric("Count status", count_row["status"])
+        st.metric("Status", count_row["status"])
     with top[1]:
         st.caption("Created")
         st.write(str(count_row["created_at"])[:19])
     with top[2]:
         st.caption("Updated")
         st.write(str(count_row["updated_at"])[:19])
+
     with top[3]:
-        b1, b2, _ = st.columns([2.6, 2.6, 7.0], vertical_alignment="center")
+        b1, b2, spacer = st.columns([3.3, 3.3, 6.4], vertical_alignment="center")
         with b1:
             if st.button("Mark complete ✅", key=f"mc_{count_id}", use_container_width=True):
                 set_count_status(count_id, "completed")
@@ -852,7 +899,10 @@ def page_count() -> None:
 
     st.divider()
 
-    search = st.text_input("Search items (optional)", placeholder="Type to filter item names across tabs…").strip().lower()
+    search = st.text_input(
+        "Search items (optional)",
+        placeholder="Type to filter item names across tabs…",
+    ).strip().lower()
 
     with st.expander("Add missing item (persists for future counts)", expanded=False):
         with st.form("inline_add_item"):
@@ -890,7 +940,8 @@ def page_count() -> None:
                 item_id = int(it["id"])
                 curr = int(lines.get(item_id, 0))
 
-                cols = st.columns([6, 3, 2, 1], vertical_alignment="center")
+                # Layout: item info | qty box | (optional spacer)
+                cols = st.columns([8, 2, 2], vertical_alignment="center")
 
                 with cols[0]:
                     label = it["name"]
@@ -901,17 +952,6 @@ def page_count() -> None:
                         st.caption(it["notes"])
 
                 with cols[1]:
-                    b1, b2, b3, b4 = st.columns(4)
-                    if b1.button("+1", key=f"p1_{count_id}_{item_id}", use_container_width=True):
-                        upsert_count_line(count_id, item_id, curr + 1); st.rerun()
-                    if b2.button("+5", key=f"p5_{count_id}_{item_id}", use_container_width=True):
-                        upsert_count_line(count_id, item_id, curr + 5); st.rerun()
-                    if b3.button("-1", key=f"m1_{count_id}_{item_id}", use_container_width=True):
-                        upsert_count_line(count_id, item_id, max(0, curr - 1)); st.rerun()
-                    if b4.button("0", key=f"z_{count_id}_{item_id}", use_container_width=True):
-                        upsert_count_line(count_id, item_id, 0); st.rerun()
-
-                with cols[2]:
                     new_qty = st.number_input(
                         "Qty",
                         min_value=0,
@@ -923,8 +963,8 @@ def page_count() -> None:
                     if int(new_qty) != curr:
                         upsert_count_line(count_id, item_id, int(new_qty))
 
-                with cols[3]:
-                    st.caption("")
+                with cols[2]:
+                    st.caption("")  # spacer
 
     st.divider()
     st.markdown("## Send Report (refined)")
@@ -938,7 +978,7 @@ def page_count() -> None:
     after_txt = st.text_area("Text after report (optional)", height=80)
 
     if not grouped_rows:
-        st.info("No nonzero quantities yet — items with qty 0 are automatically hidden from the email.")
+        st.info("No nonzero quantities yet — items with qty 0 are hidden from the email.")
         return
 
     if st.button("Send inventory report ✉️", disabled=not bool(recipient.strip())):
@@ -954,6 +994,7 @@ def page_count() -> None:
             st.error(f"Failed to send: {exc}")
         else:
             st.success("Report sent!")
+
 
 
 def page_history() -> None:
