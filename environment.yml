@@ -1,11 +1,9 @@
-# environment.yml  ── place at the project root
-name: inventory_app           # the environment’s name
+name: inventory-app
 channels:
-  - conda-forge               # richer, up-to-date builds
+  - conda-forge
 dependencies:
-  - datetime
   - python=3.12
   - pip
   - pip:
-      - streamlit
-      - psycopg2
+      - streamlit>=1.30
+      - psycopg2-binary>=2.9
