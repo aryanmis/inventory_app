@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html as html_lib
 import os
 import re
 import datetime as dt
@@ -20,45 +21,213 @@ from email.mime.text import MIMEText
 # Config
 # ──────────────────────────────────────────────────────────────────────────────
 
-APP_TITLE = "Inventory App"
+APP_TITLE = "Inventory"
 
-st.set_page_config(page_title=APP_TITLE, layout="wide")
-st.title(APP_TITLE)
+st.set_page_config(page_title=APP_TITLE, layout="wide", page_icon="📦")
 
 
-# UI CSS: fixes button wrapping, header button sizing, compact qty input
+# ── Modern minimalist CSS ─────────────────────────────────────────────────────
 st.markdown(
     """
     <style>
-      /* Prevent button label wrapping (fixes "Delet e") */
-      .stButton > button { white-space: nowrap !important; }
+      /* ── Typography ── */
+      html, body, [class*="css"], .stApp {
+        font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont,
+                     'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+      }
 
-      /* Consistent buttons */
+      /* ── App background ── */
+      .stApp { background-color: #f8f9fa; }
+
+      /* ── Main content area ── */
+      .main .block-container {
+        padding-top: 2rem;
+        padding-bottom: 3rem;
+        max-width: 1100px;
+      }
+
+      /* ── App title ── */
+      h1 {
+        font-size: 1.6rem !important;
+        font-weight: 700 !important;
+        letter-spacing: -0.03em !important;
+        color: #111827 !important;
+        padding-bottom: 0.25rem !important;
+      }
+
+      /* ── Section headings ── */
+      h2 {
+        font-size: 1.15rem !important;
+        font-weight: 600 !important;
+        letter-spacing: -0.01em !important;
+        color: #374151 !important;
+        margin-top: 1.5rem !important;
+      }
+
+      h3 {
+        font-size: 1rem !important;
+        font-weight: 600 !important;
+        color: #374151 !important;
+        margin-top: 0.75rem !important;
+      }
+
+      /* ── Sidebar ── */
+      [data-testid="stSidebar"] {
+        background-color: #ffffff !important;
+        border-right: 1px solid #e5e7eb !important;
+      }
+      [data-testid="stSidebar"] .stRadio label {
+        font-size: 0.9rem !important;
+        font-weight: 500 !important;
+        color: #374151 !important;
+      }
+
+      /* ── Buttons ── */
       .stButton > button {
-        min-height: 44px;
-        padding: 0.35rem 0.65rem;
-        border-radius: 10px;
+        white-space: nowrap !important;
+        min-height: 40px !important;
+        padding: 0.3rem 0.9rem !important;
+        border-radius: 6px !important;
+        font-size: 0.875rem !important;
+        font-weight: 500 !important;
+        border: 1px solid #d1d5db !important;
+        background-color: #ffffff !important;
+        color: #111827 !important;
+        transition: background-color 0.15s ease, border-color 0.15s ease !important;
+      }
+      .stButton > button:hover {
+        background-color: #f3f4f6 !important;
+        border-color: #9ca3af !important;
       }
 
-      /* Keep qty number input compact */
-      div[data-testid="stNumberInput"] { max-width: 180px; }
+      /* Primary-style form submit buttons */
+      .stFormSubmitButton > button {
+        background-color: #111827 !important;
+        color: #ffffff !important;
+        border: none !important;
+        border-radius: 6px !important;
+        font-size: 0.875rem !important;
+        font-weight: 500 !important;
+        min-height: 40px !important;
+        padding: 0.3rem 1rem !important;
+      }
+      .stFormSubmitButton > button:hover {
+        background-color: #374151 !important;
+      }
+
+      /* ── Number inputs ── */
+      div[data-testid="stNumberInput"] { max-width: 160px !important; }
       div[data-testid="stNumberInput"] input {
-        text-align: center;
-        font-weight: 700;
+        text-align: center !important;
+        font-weight: 700 !important;
+        font-size: 1rem !important;
+        border-radius: 6px !important;
       }
 
-      /* Slightly reduce horizontal gap in rows */
+      /* ── Inputs & text areas ── */
+      .stTextInput input, .stTextArea textarea {
+        border-radius: 6px !important;
+        border-color: #d1d5db !important;
+        font-size: 0.9rem !important;
+      }
+      .stTextInput input:focus, .stTextArea textarea:focus {
+        border-color: #6366f1 !important;
+        box-shadow: 0 0 0 2px rgba(99,102,241,0.1) !important;
+      }
+
+      /* ── Selectbox ── */
+      .stSelectbox > div > div {
+        border-radius: 6px !important;
+        border-color: #d1d5db !important;
+        font-size: 0.9rem !important;
+      }
+
+      /* ── Expanders ── */
+      .streamlit-expanderHeader {
+        font-size: 0.9rem !important;
+        font-weight: 500 !important;
+        background-color: #ffffff !important;
+        border-radius: 6px !important;
+        border: 1px solid #e5e7eb !important;
+        padding: 0.5rem 0.75rem !important;
+      }
+      .streamlit-expanderContent {
+        border: 1px solid #e5e7eb !important;
+        border-top: none !important;
+        border-radius: 0 0 6px 6px !important;
+        background-color: #ffffff !important;
+        padding: 1rem !important;
+      }
+
+      /* ── Metrics ── */
+      [data-testid="stMetric"] {
+        background-color: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 0.75rem 1rem;
+      }
+
+      /* ── Tabs ── */
+      .stTabs [data-baseweb="tab-list"] {
+        gap: 0.25rem;
+        border-bottom: 2px solid #e5e7eb;
+      }
+      .stTabs [data-baseweb="tab"] {
+        border-radius: 6px 6px 0 0 !important;
+        font-size: 0.875rem !important;
+        font-weight: 500 !important;
+        color: #6b7280 !important;
+        padding: 0.5rem 1rem !important;
+      }
+      .stTabs [aria-selected="true"] {
+        background-color: #f9fafb !important;
+        color: #111827 !important;
+        border-bottom: 2px solid #6366f1 !important;
+      }
+
+      /* ── Info / success / error banners ── */
+      .stAlert {
+        border-radius: 6px !important;
+        font-size: 0.875rem !important;
+      }
+
+      /* ── Dividers ── */
+      hr { border-color: #e5e7eb !important; margin: 1.25rem 0 !important; }
+
+      /* ── Captions ── */
+      .stCaptionContainer p, small {
+        color: #9ca3af !important;
+        font-size: 0.8rem !important;
+      }
+
+      /* ── Column gap ── */
       div[data-testid="stHorizontalBlock"] { gap: 0.75rem; }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
+st.title("📦 Inventory")
+
 
 def page_header(title: str, subtitle: str = "") -> None:
     st.subheader(title)
     if subtitle:
         st.caption(subtitle)
+    st.divider()
+
+
+def fmt_ts(ts) -> str:
+    """Format a database timestamp into a readable local string."""
+    if ts is None:
+        return "—"
+    try:
+        if isinstance(ts, str):
+            ts = dt.datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        # Convert UTC → local display (strip tz for display)
+        return ts.strftime("%b %d, %Y  %I:%M %p").lstrip("0")
+    except Exception:
+        return str(ts)[:19]
 
 
 def now_ts() -> dt.datetime:
@@ -66,7 +235,6 @@ def now_ts() -> dt.datetime:
 
 
 def get_database_url() -> str:
-    # Prefer env var; fallback to Streamlit secrets
     url = os.environ.get("DATABASE_URL", "")
     if not url:
         try:
@@ -75,8 +243,9 @@ def get_database_url() -> str:
             url = ""
     if not url:
         raise RuntimeError(
-            "DATABASE_URL is not set. Add it to Streamlit secrets:\n"
-            'DATABASE_URL="postgresql://postgres:<PW>@db.<REF>.supabase.co:5432/postgres"'
+            "DATABASE_URL is not set.\n\n"
+            "Add it to your Streamlit secrets file (.streamlit/secrets.toml):\n\n"
+            '  DATABASE_URL = "postgresql://user:password@host:5432/dbname"'
         )
     return url
 
@@ -93,30 +262,30 @@ def init_db() -> None:
     with conn.cursor() as cur:
         cur.execute("""
                     CREATE TABLE IF NOT EXISTS producers (
-                                                             id BIGSERIAL PRIMARY KEY,
-                                                             name TEXT NOT NULL UNIQUE,
-                                                             default_recipient TEXT NOT NULL DEFAULT '',
-                                                             default_subject_prefix TEXT NOT NULL DEFAULT 'Inventory',
-                                                             archived BOOLEAN NOT NULL DEFAULT FALSE,
-                                                             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-                        );
+                        id BIGSERIAL PRIMARY KEY,
+                        name TEXT NOT NULL UNIQUE,
+                        default_recipient TEXT NOT NULL DEFAULT '',
+                        default_subject_prefix TEXT NOT NULL DEFAULT 'Inventory',
+                        archived BOOLEAN NOT NULL DEFAULT FALSE,
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    );
                     """)
 
         cur.execute("""
                     CREATE TABLE IF NOT EXISTS sections (
-                                                            id BIGSERIAL PRIMARY KEY,
-                                                            producer_id BIGINT NOT NULL REFERENCES producers(id) ON DELETE CASCADE,
+                        id BIGSERIAL PRIMARY KEY,
+                        producer_id BIGINT NOT NULL REFERENCES producers(id) ON DELETE CASCADE,
                         name TEXT NOT NULL,
                         sort_order INT NOT NULL DEFAULT 0,
                         active BOOLEAN NOT NULL DEFAULT TRUE,
                         UNIQUE(producer_id, name)
-                        );
+                    );
                     """)
 
         cur.execute("""
                     CREATE TABLE IF NOT EXISTS items (
-                                                         id BIGSERIAL PRIMARY KEY,
-                                                         producer_id BIGINT NOT NULL REFERENCES producers(id) ON DELETE CASCADE,
+                        id BIGSERIAL PRIMARY KEY,
+                        producer_id BIGINT NOT NULL REFERENCES producers(id) ON DELETE CASCADE,
                         section_id BIGINT NOT NULL REFERENCES sections(id) ON DELETE CASCADE,
                         name TEXT NOT NULL,
                         unit TEXT NOT NULL DEFAULT '',
@@ -124,7 +293,7 @@ def init_db() -> None:
                         active BOOLEAN NOT NULL DEFAULT TRUE,
                         sort_order INT NOT NULL DEFAULT 0,
                         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-                        );
+                    );
                     """)
 
         cur.execute("CREATE INDEX IF NOT EXISTS idx_items_producer ON items(producer_id);")
@@ -132,23 +301,23 @@ def init_db() -> None:
 
         cur.execute("""
                     CREATE TABLE IF NOT EXISTS counts (
-                                                          id BIGSERIAL PRIMARY KEY,
-                                                          producer_id BIGINT NOT NULL REFERENCES producers(id) ON DELETE CASCADE,
-                        status TEXT NOT NULL DEFAULT 'in_progress',  -- in_progress, completed
+                        id BIGSERIAL PRIMARY KEY,
+                        producer_id BIGINT NOT NULL REFERENCES producers(id) ON DELETE CASCADE,
+                        status TEXT NOT NULL DEFAULT 'in_progress',
                         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                         note TEXT NOT NULL DEFAULT ''
-                        );
+                    );
                     """)
 
         cur.execute("""
                     CREATE TABLE IF NOT EXISTS count_lines (
-                                                               count_id BIGINT NOT NULL REFERENCES counts(id) ON DELETE CASCADE,
+                        count_id BIGINT NOT NULL REFERENCES counts(id) ON DELETE CASCADE,
                         item_id BIGINT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
                         qty INT NOT NULL DEFAULT 0,
                         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                         PRIMARY KEY(count_id, item_id)
-                        );
+                    );
                     """)
 
 
@@ -203,8 +372,7 @@ def create_producer(name: str, default_recipient: str, default_subject_prefix: s
     return qinsert_returning_id(
         """
         INSERT INTO producers(name, default_recipient, default_subject_prefix)
-        VALUES (%s,%s,%s)
-            RETURNING id
+        VALUES (%s,%s,%s) RETURNING id
         """,
         (name.strip(), default_recipient.strip(), (default_subject_prefix.strip() or "Inventory")),
     )
@@ -238,8 +406,7 @@ def create_section(producer_id: int, name: str, sort_order: int) -> int:
     return qinsert_returning_id(
         """
         INSERT INTO sections(producer_id, name, sort_order, active)
-        VALUES (%s,%s,%s,true)
-            RETURNING id
+        VALUES (%s,%s,%s,true) RETURNING id
         """,
         (producer_id, name.strip(), int(sort_order)),
     )
@@ -266,8 +433,8 @@ def list_items(producer_id: int, include_inactive: bool = False) -> List[Dict]:
     base = """
            SELECT items.*, sections.name AS section_name, sections.sort_order AS section_sort
            FROM items
-                    JOIN sections ON sections.id = items.section_id
-           WHERE items.producer_id=%s \
+                JOIN sections ON sections.id = items.section_id
+           WHERE items.producer_id=%s
            """
     if not include_inactive:
         base += " AND items.active=true AND sections.active=true"
@@ -287,8 +454,7 @@ def create_item(producer_id: int, section_id: int, name: str, unit: str = "", no
     return qinsert_returning_id(
         """
         INSERT INTO items(producer_id, section_id, name, unit, notes, active, sort_order)
-        VALUES (%s,%s,%s,%s,%s,true,%s)
-            RETURNING id
+        VALUES (%s,%s,%s,%s,%s,true,%s) RETURNING id
         """,
         (producer_id, section_id, name.strip(), unit.strip(), notes.strip(), int(sort_order)),
     )
@@ -322,8 +488,7 @@ def start_or_resume_count(producer_id: int) -> int:
         """
         SELECT id FROM counts
         WHERE producer_id=%s AND status='in_progress'
-        ORDER BY created_at DESC
-            LIMIT 1
+        ORDER BY created_at DESC LIMIT 1
         """,
         (producer_id,),
     )
@@ -345,8 +510,7 @@ def list_recent_counts(producer_id: int, limit: int = 50) -> List[Dict]:
         """
         SELECT * FROM counts
         WHERE producer_id=%s
-        ORDER BY created_at DESC
-            LIMIT %s
+        ORDER BY created_at DESC LIMIT %s
         """,
         (producer_id, int(limit)),
     )
@@ -362,9 +526,9 @@ def upsert_count_line(count_id: int, item_id: int, qty: int) -> None:
         """
         INSERT INTO count_lines(count_id, item_id, qty, updated_at)
         VALUES (%s,%s,%s,NOW())
-            ON CONFLICT (count_id, item_id) DO UPDATE SET
+        ON CONFLICT (count_id, item_id) DO UPDATE SET
             qty=EXCLUDED.qty,
-                                                   updated_at=NOW()
+            updated_at=NOW()
         """,
         (count_id, item_id, int(qty)),
     )
@@ -382,10 +546,7 @@ def sanitize_subject(s: str) -> str:
 def build_grouped_report_rows(producer_id: int, count_id: int) -> List[Tuple[str, List[Tuple[str, int]]]]:
     """
     [(section_name, [(item_name, qty), ...]), ...]
-    - excludes qty <= 0
-    - excludes empty sections
-    - sorts sections by sort_order then name
-    - sorts items by name
+    Excludes qty <= 0 and empty sections.
     """
     sections = list_sections(producer_id, active_only=True)
     sec_meta = {int(s["id"]): (int(s["sort_order"]), str(s["name"])) for s in sections}
@@ -415,6 +576,17 @@ def build_grouped_report_rows(producer_id: int, count_id: int) -> List[Tuple[str
     return rows
 
 
+def _smtp_secret(key: str, default: str = "") -> str:
+    """Read a value from env or Streamlit secrets safely."""
+    val = os.environ.get(key, "")
+    if not val:
+        try:
+            val = st.secrets.get(key, default)
+        except Exception:
+            val = default
+    return val
+
+
 def send_email_report(
         *,
         recipient: str,
@@ -423,14 +595,17 @@ def send_email_report(
         after_txt: str,
         grouped_rows: List[Tuple[str, List[Tuple[str, int]]]],
 ) -> None:
-    smtp_host = os.environ.get("SMTP_HOST") or st.secrets.get("SMTP_HOST", "")
-    smtp_port_raw = os.environ.get("SMTP_PORT") or st.secrets.get("SMTP_PORT", "587")
-    smtp_user = os.environ.get("SMTP_USER") or st.secrets.get("SMTP_USER", "")
-    smtp_pass = os.environ.get("SMTP_PASS") or st.secrets.get("SMTP_PASS", "")
-    smtp_from = os.environ.get("SMTP_FROM") or st.secrets.get("SMTP_FROM", "") or smtp_user
+    smtp_host = _smtp_secret("SMTP_HOST")
+    smtp_port_raw = _smtp_secret("SMTP_PORT", "587")
+    smtp_user = _smtp_secret("SMTP_USER")
+    smtp_pass = _smtp_secret("SMTP_PASS")
+    smtp_from = _smtp_secret("SMTP_FROM") or smtp_user
 
     if not (smtp_host and smtp_user and smtp_pass and smtp_from):
-        raise RuntimeError("Missing SMTP credentials in secrets/env (SMTP_HOST/PORT/USER/PASS[/FROM]).")
+        raise RuntimeError(
+            "Missing SMTP credentials. Add SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS "
+            "(and optionally SMTP_FROM) to your Streamlit secrets or environment variables."
+        )
 
     try:
         smtp_port = int(smtp_port_raw)
@@ -457,36 +632,52 @@ def send_email_report(
 
     body_plain = "\n".join(lines).strip()
 
-    # Build HTML
-    html_parts: List[str] = []
-    if before_txt.strip():
-        html_parts.append(f"<p>{before_txt.strip().replace('\\n', '<br/>')}</p>")
+    # Build HTML — escape all user-supplied content to prevent injection
+    def nl2br(text: str) -> str:
+        return html_lib.escape(text).replace("\n", "<br/>")
 
-    html_parts.append("<div style='font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;'>")
+    html_parts: List[str] = []
+    html_parts.append(
+        "<div style='font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "
+        "Helvetica, Arial; color: #111827; font-size: 15px; line-height: 1.6;'>"
+    )
+
+    if before_txt.strip():
+        html_parts.append(f"<p style='margin: 0 0 16px 0;'>{nl2br(before_txt.strip())}</p>")
+
     for section, items in grouped_rows:
         if not items:
             continue
-        html_parts.append(f"<h3 style='margin:14px 0 8px 0;'>{section}</h3>")
         html_parts.append(
-            "<table cellspacing='0' cellpadding='0' style='border-collapse:collapse; width:100%; max-width:700px;'>"
+            f"<h3 style='margin: 20px 0 8px 0; font-size: 14px; font-weight: 600; "
+            f"text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280;'>"
+            f"{html_lib.escape(section)}</h3>"
+        )
+        html_parts.append(
+            "<table cellspacing='0' cellpadding='0' style='border-collapse: collapse; "
+            "width: 100%; max-width: 600px; margin-bottom: 16px;'>"
             "<tr>"
-            "<th align='left' style='border-bottom:1px solid #ddd; padding:6px 8px;'>Item</th>"
-            "<th align='right' style='border-bottom:1px solid #ddd; padding:6px 8px;'>Qty</th>"
+            "<th align='left' style='border-bottom: 2px solid #e5e7eb; padding: 6px 8px; "
+            "font-size: 12px; color: #9ca3af; font-weight: 500;'>Item</th>"
+            "<th align='right' style='border-bottom: 2px solid #e5e7eb; padding: 6px 8px; "
+            "font-size: 12px; color: #9ca3af; font-weight: 500;'>Qty</th>"
             "</tr>"
         )
         for name, qty in items:
             html_parts.append(
-                "<tr>"
-                f"<td style='border-bottom:1px solid #f0f0f0; padding:6px 8px;'>{name}</td>"
-                f"<td align='right' style='border-bottom:1px solid #f0f0f0; padding:6px 8px; font-weight:700;'>{qty}</td>"
-                "</tr>"
+                f"<tr>"
+                f"<td style='border-bottom: 1px solid #f3f4f6; padding: 8px 8px; "
+                f"font-size: 14px;'>{html_lib.escape(name)}</td>"
+                f"<td align='right' style='border-bottom: 1px solid #f3f4f6; padding: 8px 8px; "
+                f"font-size: 14px; font-weight: 700;'>{qty}</td>"
+                f"</tr>"
             )
         html_parts.append("</table>")
-    html_parts.append("</div>")
 
     if after_txt.strip():
-        html_parts.append(f"<p>{after_txt.strip().replace('\\n', '<br/>')}</p>")
+        html_parts.append(f"<p style='margin: 16px 0 0 0; color: #6b7280;'>{nl2br(after_txt.strip())}</p>")
 
+    html_parts.append("</div>")
     body_html = "\n".join(html_parts)
 
     msg = MIMEMultipart("alternative")
@@ -496,24 +687,20 @@ def send_email_report(
     msg.attach(MIMEText(body_plain, "plain", "utf-8"))
     msg.attach(MIMEText(body_html, "html", "utf-8"))
 
-    # Connect robustly
     timeout_s = 20
 
     if smtp_port == 465:
-        # SSL/TLS from the start
         with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=timeout_s) as server:
             server.ehlo()
             server.login(smtp_user, smtp_pass)
             server.sendmail(smtp_from, [recipient.strip()], msg.as_string())
     else:
-        # STARTTLS (typical 587)
         with smtplib.SMTP(smtp_host, smtp_port, timeout=timeout_s) as server:
             server.ehlo()
             server.starttls()
             server.ehlo()
             server.login(smtp_user, smtp_pass)
             server.sendmail(smtp_from, [recipient.strip()], msg.as_string())
-
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -523,7 +710,7 @@ def send_email_report(
 def require_producer_selected() -> Tuple[int, Dict]:
     prods = list_producers(include_archived=False)
     if not prods:
-        st.info("No producers yet. Go to **Producers** → **Create Producer**.")
+        st.info("No producers yet. Go to **Producers** to create your first one.")
         st.stop()
 
     labels = [p["name"] for p in prods]
@@ -549,10 +736,8 @@ def require_producer_selected() -> Tuple[int, Dict]:
     return chosen_id, p
 
 
-def confirm_button(key: str, label: str, confirm_label: str = "Delete", cancel_label: str = "Keep") -> bool:
-    """
-    Two-click confirm pattern. Returns True only when user hits Confirm on second step.
-    """
+def confirm_button(key: str, label: str, confirm_label: str = "Yes, delete", cancel_label: str = "Cancel") -> bool:
+    """Two-click confirm pattern. Returns True only when the user confirms."""
     state_key = f"confirm__{key}"
     if state_key not in st.session_state:
         st.session_state[state_key] = False
@@ -563,7 +748,7 @@ def confirm_button(key: str, label: str, confirm_label: str = "Delete", cancel_l
             st.rerun()
         return False
 
-    cols = st.columns([2.2, 2.2, 10], vertical_alignment="center")
+    cols = st.columns([2.5, 2.5, 8], vertical_alignment="center")
     did_confirm = False
     with cols[0]:
         if st.button(confirm_label, key=f"{key}__confirm", use_container_width=True):
@@ -585,7 +770,7 @@ def confirm_button(key: str, label: str, confirm_label: str = "Delete", cancel_l
 # ──────────────────────────────────────────────────────────────────────────────
 
 def page_producers() -> None:
-    page_header("Producers", "Create and manage producers entirely in the app (no JSON/CSV).")
+    page_header("Producers", "A producer is a location or entity you track inventory for (e.g. a store, kitchen, or warehouse).")
 
     colA, colB = st.columns([2, 3], vertical_alignment="top")
 
@@ -593,18 +778,26 @@ def page_producers() -> None:
         st.markdown("### Existing producers")
         prods = list_producers(include_archived=True)
         if not prods:
-            st.info("No producers yet.")
+            st.info("No producers yet — create one on the right.")
         else:
             for p in prods:
-                status = " (archived)" if p["archived"] else ""
+                status = " *(archived)*" if p["archived"] else ""
                 st.write(f"• **{p['name']}**{status}")
 
     with colB:
-        st.markdown("### Create producer")
+        st.markdown("### Create a new producer")
         with st.form("create_producer_form"):
-            name = st.text_input("Producer name *")
-            default_recipient = st.text_input("Default recipient email (optional)")
-            default_subject_prefix = st.text_input("Default subject prefix", value="Inventory")
+            name = st.text_input("Producer name *", placeholder="e.g. Main Store, Warehouse A")
+            default_recipient = st.text_input(
+                "Default recipient email",
+                placeholder="reports@example.com",
+                help="The email address that inventory reports will be sent to by default.",
+            )
+            default_subject_prefix = st.text_input(
+                "Email subject prefix",
+                value="Inventory",
+                help="Reports will be sent with a subject like: Inventory [Name] 01.15.25",
+            )
             submitted = st.form_submit_button("Create producer")
 
         if submitted:
@@ -616,16 +809,16 @@ def page_producers() -> None:
                 except Exception as e:
                     st.error(f"Could not create producer: {e}")
                 else:
-                    st.success("Producer created.")
+                    st.success(f"Producer **{name.strip()}** created.")
                     st.session_state.producer_id = new_id
                     st.rerun()
 
         st.divider()
 
-        st.markdown("### Edit producer")
+        st.markdown("### Edit a producer")
         prods_any = list_producers(include_archived=True)
         if not prods_any:
-            st.stop()
+            return
 
         labels = [p["name"] for p in prods_any]
         ids = [int(p["id"]) for p in prods_any]
@@ -633,13 +826,17 @@ def page_producers() -> None:
         pid = ids[labels.index(pick)]
         p = get_producer(pid)
         if not p:
-            st.stop()
+            return
 
         with st.form("edit_producer_form"):
             new_name = st.text_input("Name", value=p["name"])
-            new_recipient = st.text_input("Default recipient", value=p["default_recipient"])
-            new_prefix = st.text_input("Default subject prefix", value=p["default_subject_prefix"])
-            archived = st.checkbox("Archived", value=bool(p["archived"]))
+            new_recipient = st.text_input("Default recipient email", value=p["default_recipient"])
+            new_prefix = st.text_input("Email subject prefix", value=p["default_subject_prefix"])
+            archived = st.checkbox(
+                "Archive this producer",
+                value=bool(p["archived"]),
+                help="Archived producers are hidden from the main view but their data is kept.",
+            )
             ok = st.form_submit_button("Save changes")
 
         if ok:
@@ -648,25 +845,36 @@ def page_producers() -> None:
             except Exception as e:
                 st.error(f"Could not save: {e}")
             else:
-                st.success("Saved.")
+                st.success("Changes saved.")
                 st.rerun()
 
 
 def page_template_builder() -> None:
     producer_id, producer = require_producer_selected()
-    page_header("Template Builder", f"Build tabs/sections and items for **{producer['name']}**.")
+    page_header(
+        "Items & Sections",
+        f"Manage the sections (tabs) and items counted for **{producer['name']}**. "
+        "Changes here apply to all future counts.",
+    )
 
-    st.markdown("## Sections (tabs)")
+    st.markdown("## Sections")
+    st.caption("Sections appear as tabs on the Count page. Create one per area or category (e.g. Cafe, Freezer, Market).")
 
     sections_all = list_sections(producer_id, active_only=False)
     sections_active = [s for s in sections_all if s["active"]]
 
     c1, c2 = st.columns([2, 3], vertical_alignment="top")
     with c1:
-        st.markdown("### Add section")
+        st.markdown("### Add a section")
         with st.form("add_section_form"):
-            sec_name = st.text_input("Section name *", placeholder="e.g., Cafe, Market, Freezer")
-            sec_order = st.number_input("Sort order", min_value=0, step=1, value=(len(sections_all) * 10))
+            sec_name = st.text_input("Section name *", placeholder="e.g. Cafe, Market, Freezer")
+            sec_order = st.number_input(
+                "Sort order",
+                min_value=0,
+                step=10,
+                value=(len(sections_all) * 10),
+                help="Lower numbers appear first. Use multiples of 10 so you can easily insert sections in between.",
+            )
             add = st.form_submit_button("Add section")
 
         if add:
@@ -678,13 +886,14 @@ def page_template_builder() -> None:
                 except Exception as e:
                     st.error(f"Could not add section: {e}")
                 else:
-                    st.success("Section added.")
+                    st.success(f"Section **{sec_name.strip()}** added.")
                     st.rerun()
 
         st.divider()
-        st.markdown("### Quick-add items (no CSV)")
+        st.markdown("### Bulk-add items")
+        st.caption("Paste a list of items — one per line. Fastest way to build your inventory list.")
         if not sections_active:
-            st.info("Create at least one active section to quick-add items.")
+            st.info("Create at least one active section before adding items.")
         else:
             with st.form("quick_add_items"):
                 sec_label = [s["name"] for s in sections_active]
@@ -692,17 +901,21 @@ def page_template_builder() -> None:
                 chosen = st.selectbox("Add into section", sec_label, index=0)
                 chosen_id = sec_ids[sec_label.index(chosen)]
 
-                st.caption("One item per line. Optional: `Item name | unit | notes`")
-                raw = st.text_area("Items", height=160, placeholder="Croissant | each | front case\nSourdough boule | each | bread rack")
+                st.caption("Format: `Item name` or `Item name | unit | notes` — one per line.")
+                raw = st.text_area(
+                    "Items",
+                    height=160,
+                    placeholder="Croissant | each | front case\nSourdough boule | each | bread rack\nOat milk | carton",
+                )
                 submit_quick = st.form_submit_button("Add items")
 
             if submit_quick:
-                lines = [ln.strip() for ln in raw.splitlines() if ln.strip()]
-                if not lines:
+                item_lines = [ln.strip() for ln in raw.splitlines() if ln.strip()]
+                if not item_lines:
                     st.error("No items entered.")
                 else:
                     added = 0
-                    for i, ln in enumerate(lines):
+                    for i, ln in enumerate(item_lines):
                         parts = [p.strip() for p in ln.split("|")]
                         nm = parts[0] if parts else ""
                         unit = parts[1] if len(parts) > 1 else ""
@@ -721,13 +934,21 @@ def page_template_builder() -> None:
             for s in sections_all:
                 sid = int(s["id"])
                 item_ct = section_item_count(sid)
-                title = f"{s['name']}" + ("" if s["active"] else " (inactive)")
-                with st.expander(title, expanded=False):
+                inactive_badge = " — inactive" if not s["active"] else ""
+                with st.expander(f"{s['name']}{inactive_badge}  ({item_ct} items)", expanded=False):
                     with st.form(f"edit_section_{sid}"):
                         new_name = st.text_input("Name", value=s["name"], key=f"sec_name_{sid}")
-                        new_order = st.number_input("Sort order", min_value=0, step=1, value=int(s["sort_order"]), key=f"sec_order_{sid}")
-                        active = st.checkbox("Active", value=bool(s["active"]), key=f"sec_active_{sid}")
-                        ok = st.form_submit_button("Save section")
+                        new_order = st.number_input(
+                            "Sort order", min_value=0, step=10,
+                            value=int(s["sort_order"]), key=f"sec_order_{sid}",
+                        )
+                        active = st.checkbox(
+                            "Active",
+                            value=bool(s["active"]),
+                            key=f"sec_active_{sid}",
+                            help="Inactive sections are hidden from the Count page.",
+                        )
+                        ok = st.form_submit_button("Save")
 
                     if ok:
                         try:
@@ -738,32 +959,34 @@ def page_template_builder() -> None:
                             st.success("Saved.")
                             st.rerun()
 
-                    st.caption(f"Items in this section: {item_ct}")
                     if item_ct == 0:
-                        if confirm_button(f"del_section_{sid}", "Delete section 🗑️"):
+                        if confirm_button(f"del_section_{sid}", "Delete section"):
                             delete_section(sid)
                             st.success("Section deleted.")
                             st.rerun()
                     else:
-                        st.caption("To delete this section, move or delete its items first (section must be empty).")
+                        st.caption(f"To delete this section, first move or delete its {item_ct} item(s).")
 
     st.divider()
     st.markdown("## Items")
 
     if not sections_active:
-        st.info("Create at least one active section to add items.")
+        st.info("Create at least one active section before adding items.")
         return
 
-    st.markdown("### Add item")
+    st.markdown("### Add a single item")
     with st.form("add_item_form"):
-        sec_label = [s["name"] for s in sections_active]
-        sec_ids = [int(s["id"]) for s in sections_active]
-        chosen = st.selectbox("Section", sec_label, index=0)
-        chosen_id = sec_ids[sec_label.index(chosen)]
-        item_name = st.text_input("Item name *")
-        unit = st.text_input("Unit (optional)", placeholder="each / case / lb / tray")
-        notes = st.text_input("Notes (optional)", placeholder="Where stored / how to count")
-        sort_order = st.number_input("Sort order", min_value=0, step=1, value=0)
+        col1, col2 = st.columns(2)
+        with col1:
+            sec_label = [s["name"] for s in sections_active]
+            sec_ids = [int(s["id"]) for s in sections_active]
+            chosen = st.selectbox("Section", sec_label, index=0)
+            chosen_id = sec_ids[sec_label.index(chosen)]
+            item_name = st.text_input("Item name *")
+        with col2:
+            unit = st.text_input("Unit (optional)", placeholder="each / case / lb / tray")
+            notes = st.text_input("Notes (optional)", placeholder="Where stored or how to count it")
+            sort_order = st.number_input("Sort order", min_value=0, step=10, value=0)
         add_item = st.form_submit_button("Add item")
 
     if add_item:
@@ -771,7 +994,7 @@ def page_template_builder() -> None:
             st.error("Item name is required.")
         else:
             create_item(producer_id, chosen_id, item_name, unit=unit, notes=notes, sort_order=int(sort_order))
-            st.success("Item added.")
+            st.success(f"Item **{item_name.strip()}** added.")
             st.rerun()
 
     st.markdown("### Edit / delete items")
@@ -785,14 +1008,17 @@ def page_template_builder() -> None:
     section_labels = [s["name"] + ("" if s["active"] else " (inactive)") for s in sections_any]
     label_to_id = {lab: sid for lab, sid in zip(section_labels, section_ids)}
 
-    search = st.text_input("Search items", placeholder="Type to filter by name…").strip().lower()
+    search = st.text_input("Search items", placeholder="Filter by name…").strip().lower()
     filtered = [it for it in items if search in it["name"].lower()] if search else items
+
+    if not filtered:
+        st.caption("No items match your search.")
+        return
 
     for it in filtered[:800]:
         item_id = int(it["id"])
-        title = f"{it['name']}  —  {it['section_name']}" + ("" if it["active"] else " (inactive)")
-        with st.expander(title, expanded=False):
-            # current section label
+        inactive_badge = " — inactive" if not it["active"] else ""
+        with st.expander(f"{it['name']}  ·  {it['section_name']}{inactive_badge}", expanded=False):
             curr_label = None
             for s in sections_any:
                 if int(s["id"]) == int(it["section_id"]):
@@ -801,14 +1027,24 @@ def page_template_builder() -> None:
             curr_label = curr_label or section_labels[0]
 
             with st.form(f"edit_item_{item_id}"):
-                new_section_label = st.selectbox("Section", section_labels, index=section_labels.index(curr_label), key=f"it_sec_{item_id}")
-                new_section_id = label_to_id[new_section_label]
-                new_name = st.text_input("Name", value=it["name"], key=f"it_name_{item_id}")
-                new_unit = st.text_input("Unit", value=it["unit"], key=f"it_unit_{item_id}")
-                new_notes = st.text_input("Notes", value=it["notes"], key=f"it_notes_{item_id}")
-                new_order = st.number_input("Sort order", min_value=0, step=1, value=int(it["sort_order"]), key=f"it_order_{item_id}")
+                col1, col2 = st.columns(2)
+                with col1:
+                    new_section_label = st.selectbox(
+                        "Section", section_labels,
+                        index=section_labels.index(curr_label),
+                        key=f"it_sec_{item_id}",
+                    )
+                    new_section_id = label_to_id[new_section_label]
+                    new_name = st.text_input("Name", value=it["name"], key=f"it_name_{item_id}")
+                with col2:
+                    new_unit = st.text_input("Unit", value=it["unit"], key=f"it_unit_{item_id}")
+                    new_notes = st.text_input("Notes", value=it["notes"], key=f"it_notes_{item_id}")
+                    new_order = st.number_input(
+                        "Sort order", min_value=0, step=10,
+                        value=int(it["sort_order"]), key=f"it_order_{item_id}",
+                    )
                 new_active = st.checkbox("Active", value=bool(it["active"]), key=f"it_active_{item_id}")
-                ok = st.form_submit_button("Save item")
+                ok = st.form_submit_button("Save changes")
 
             if ok:
                 update_item(item_id, new_section_id, new_name, new_unit, new_notes, bool(new_active), int(new_order))
@@ -816,7 +1052,7 @@ def page_template_builder() -> None:
                 st.rerun()
 
             st.divider()
-            if confirm_button(f"del_item_{item_id}", "Delete item 🗑️"):
+            if confirm_button(f"del_item_{item_id}", "Delete item"):
                 delete_item(item_id)
                 st.success("Item deleted.")
                 st.rerun()
@@ -824,73 +1060,47 @@ def page_template_builder() -> None:
 
 def page_count() -> None:
     producer_id, producer = require_producer_selected()
-    page_header("Count", f"Manual weekly count for **{producer['name']}**.")
-
-    # Page-only CSS: fixes header button text fitting + consistent sizing
-    st.markdown(
-        """
-        <style>
-          /* Keep button labels on one line and shrink font slightly so it always fits */
-          .stButton > button {
-            white-space: nowrap !important;
-            min-height: 44px;
-            padding: 0.25rem 0.7rem !important;
-            border-radius: 10px;
-            width: 100%;
-            font-size: 0.95rem !important;
-            line-height: 1.1 !important;
-          }
-
-          /* Compact number inputs so they don't become giant */
-          div[data-testid="stNumberInput"] { max-width: 160px; }
-          div[data-testid="stNumberInput"] input { text-align: center; font-weight: 700; }
-
-          /* Reduce horizontal spacing between columns a bit */
-          div[data-testid="stHorizontalBlock"] { gap: 0.65rem; }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+    page_header("Count", f"Enter quantities for **{producer['name']}**. Changes are saved automatically.")
 
     sections = list_sections(producer_id, active_only=True)
     if not sections:
-        st.info("No sections yet. Go to **Template Builder** to create tabs/sections.")
+        st.info("No sections yet. Go to **Items & Sections** to set up your inventory template.")
         st.stop()
 
     items_by_section = list_items_by_section(producer_id, include_inactive=False)
     if not any(items_by_section.values()):
-        st.info("No items yet. Go to **Template Builder** to add items.")
+        st.info("No items yet. Go to **Items & Sections** to add items.")
         st.stop()
 
     count_id = start_or_resume_count(producer_id)
     count_row = get_count(count_id)
     if not count_row:
-        st.error("Could not load count.")
+        st.error("Could not load count. Please refresh the page.")
         st.stop()
 
-    # Always reload lines fresh (don’t rely on stale local dict after reruns)
     lines = load_count_lines(count_id)
 
-    # Header actions: widen buttons so text fits reliably
-    top = st.columns([2.0, 2.0, 2.0, 8.0], vertical_alignment="center")
+    # Status bar
+    status_color = "#22c55e" if count_row["status"] == "completed" else "#f59e0b"
+    status_label = "Completed" if count_row["status"] == "completed" else "In Progress"
+
+    top = st.columns([2, 2, 2, 5], vertical_alignment="center")
     with top[0]:
-        st.metric("Status", count_row["status"])
+        st.metric("Count #", str(count_id))
     with top[1]:
-        st.caption("Created")
-        st.write(str(count_row["created_at"])[:19])
+        st.metric("Status", status_label)
     with top[2]:
-        st.caption("Updated")
-        st.write(str(count_row["updated_at"])[:19])
+        st.metric("Last saved", fmt_ts(count_row["updated_at"]))
 
     with top[3]:
-        b1, b2, spacer = st.columns([3.3, 3.3, 6.4], vertical_alignment="center")
+        b1, b2, _ = st.columns([3, 3, 4], vertical_alignment="center")
         with b1:
-            if st.button("Mark complete ✅", key=f"mc_{count_id}", use_container_width=True):
+            if st.button("Mark complete", key=f"mc_{count_id}", use_container_width=True):
                 set_count_status(count_id, "completed")
-                st.success("Marked complete.")
+                st.success("Count marked as complete.")
                 st.rerun()
         with b2:
-            if st.button("Start new count 🆕", key=f"snc_{count_id}", use_container_width=True):
+            if st.button("Start new count", key=f"snc_{count_id}", use_container_width=True):
                 if count_row["status"] != "completed":
                     set_count_status(count_id, "completed")
                 new_id = create_new_count(producer_id)
@@ -900,54 +1110,58 @@ def page_count() -> None:
     st.divider()
 
     search = st.text_input(
-        "Search items (optional)",
-        placeholder="Type to filter item names across tabs…",
+        "Search items",
+        placeholder="Filter item names across all tabs…",
+        label_visibility="collapsed",
     ).strip().lower()
 
-    with st.expander("Add missing item (persists for future counts)", expanded=False):
+    with st.expander("Add a missing item to this count", expanded=False):
+        st.caption("This item will be saved and appear in all future counts too.")
         with st.form("inline_add_item"):
-            sec_label = [s["name"] for s in sections]
-            sec_ids = [int(s["id"]) for s in sections]
-            chosen = st.selectbox("Section", sec_label, index=0)
-            chosen_id = sec_ids[sec_label.index(chosen)]
-            nm = st.text_input("Item name *", placeholder="New item name")
-            unit = st.text_input("Unit (optional)")
-            notes = st.text_input("Notes (optional)")
+            col1, col2, col3 = st.columns([2, 1, 1])
+            with col1:
+                sec_label = [s["name"] for s in sections]
+                sec_ids = [int(s["id"]) for s in sections]
+                chosen = st.selectbox("Section", sec_label, index=0)
+                chosen_id = sec_ids[sec_label.index(chosen)]
+                nm = st.text_input("Item name *", placeholder="New item name")
+            with col2:
+                unit = st.text_input("Unit (optional)")
+            with col3:
+                notes = st.text_input("Notes (optional)")
             ok = st.form_submit_button("Add item")
         if ok:
             if not nm.strip():
                 st.error("Item name is required.")
             else:
                 create_item(producer_id, chosen_id, nm, unit=unit, notes=notes, sort_order=9999)
-                st.success("Item added.")
+                st.success(f"Item **{nm.strip()}** added.")
                 st.rerun()
 
     tabs = st.tabs([s["name"] for s in sections])
 
     for tab, section in zip(tabs, sections):
         sid = int(section["id"])
-        items = items_by_section.get(sid, [])
+        tab_items = items_by_section.get(sid, [])
         if search:
-            items = [it for it in items if search in it["name"].lower()]
+            tab_items = [it for it in tab_items if search in it["name"].lower()]
 
         with tab:
-            st.markdown(f"### {section['name']}")
-            if not items:
-                st.caption("No matching items in this tab.")
+            if not tab_items:
+                st.caption("No matching items in this section.")
                 continue
 
-            for it in items:
+            for it in tab_items:
                 item_id = int(it["id"])
                 curr = int(lines.get(item_id, 0))
 
-                # Layout: item info | qty box | (optional spacer)
-                cols = st.columns([8, 2, 2], vertical_alignment="center")
+                cols = st.columns([7, 2, 3], vertical_alignment="center")
 
                 with cols[0]:
-                    label = it["name"]
+                    label = f"**{it['name']}**"
                     if (it.get("unit") or "").strip():
                         label += f"  ·  *{it['unit']}*"
-                    st.write(label)
+                    st.markdown(label)
                     if (it.get("notes") or "").strip():
                         st.caption(it["notes"])
 
@@ -964,53 +1178,68 @@ def page_count() -> None:
                         upsert_count_line(count_id, item_id, int(new_qty))
 
                 with cols[2]:
-                    st.caption("")  # spacer
+                    pass  # spacer
 
     st.divider()
-    st.markdown("## Send Report (refined)")
+    st.markdown("## Send Report")
 
     grouped_rows = build_grouped_report_rows(producer_id, count_id)
 
-    default_subject = f"{producer['default_subject_prefix']} {producer['name']} {dt.date.today().strftime('%m.%d.%y')}"
-    subject = st.text_input("Email subject", value=default_subject)
-    recipient = st.text_input("Recipient email", value=producer["default_recipient"])
-    before_txt = st.text_area("Text before report (optional)", height=80)
-    after_txt = st.text_area("Text after report (optional)", height=80)
-
     if not grouped_rows:
-        st.info("No nonzero quantities yet — items with qty 0 are hidden from the email.")
+        st.info("No items with a quantity above 0 yet. Enter some quantities above, then come back here to send the report.")
         return
 
-    if st.button("Send inventory report ✉️", disabled=not bool(recipient.strip())):
-        try:
-            send_email_report(
-                recipient=recipient.strip(),
-                subject=subject.strip(),
-                before_txt=before_txt,
-                after_txt=after_txt,
-                grouped_rows=grouped_rows,
-            )
-        except Exception as exc:
-            st.error(f"Failed to send: {exc}")
-        else:
-            st.success("Report sent!")
+    col1, col2 = st.columns(2)
+    with col1:
+        default_subject = (
+            f"{producer['default_subject_prefix']} {producer['name']} "
+            f"{dt.date.today().strftime('%m.%d.%y')}"
+        )
+        subject = st.text_input("Email subject", value=default_subject)
+        recipient = st.text_input(
+            "Recipient email",
+            value=producer["default_recipient"],
+            help="The email address to send the report to.",
+        )
+    with col2:
+        before_txt = st.text_area("Opening message (optional)", height=80, placeholder="Hi, please see this week's inventory count.")
+        after_txt = st.text_area("Closing message (optional)", height=80, placeholder="Let me know if you have any questions.")
 
+    if not recipient.strip():
+        st.caption("Enter a recipient email address to send the report.")
+    else:
+        if st.button("Send inventory report →", use_container_width=False):
+            with st.spinner("Sending…"):
+                try:
+                    send_email_report(
+                        recipient=recipient.strip(),
+                        subject=subject.strip(),
+                        before_txt=before_txt,
+                        after_txt=after_txt,
+                        grouped_rows=grouped_rows,
+                    )
+                except Exception as exc:
+                    st.error(f"Failed to send: {exc}")
+                else:
+                    st.success("Report sent!")
 
 
 def page_history() -> None:
     producer_id, producer = require_producer_selected()
-    page_header("History", f"Recent counts for **{producer['name']}** (qty 0 hidden).")
+    page_header("History", f"Past counts for **{producer['name']}**. Items with qty 0 are hidden.")
 
     rows = list_recent_counts(producer_id, limit=50)
     if not rows:
-        st.info("No counts yet.")
+        st.info("No counts yet. Complete a count on the Count page and it will appear here.")
         return
 
     sec_map = {int(s["id"]): s["name"] for s in list_sections(producer_id, active_only=False)}
 
     for r in rows:
         cid = int(r["id"])
-        with st.expander(f"Count #{cid} — {r['status']} — {str(r['created_at'])[:19]}", expanded=False):
+        status_badge = "✓" if r["status"] == "completed" else "…"
+        label = f"{status_badge}  Count #{cid}  —  {fmt_ts(r['created_at'])}"
+        with st.expander(label, expanded=False):
             qty_map = load_count_lines(cid)
             items_all = list_items(producer_id, include_inactive=True)
 
@@ -1022,13 +1251,15 @@ def page_history() -> None:
                 grouped.setdefault(sec_map.get(int(it["section_id"]), "Other"), []).append((it["name"], q))
 
             if not grouped:
-                st.caption("No nonzero quantities recorded.")
+                st.caption("No quantities recorded for this count.")
                 continue
 
-            for sec_name in sorted(grouped.keys(), key=lambda x: x.lower()):
-                st.markdown(f"#### {sec_name}")
-                for nm, q in sorted(grouped[sec_name], key=lambda x: x[0].lower()):
-                    st.write(f"- {nm}: **{q}**")
+            cols = st.columns(min(len(grouped), 3))
+            for i, sec_name in enumerate(sorted(grouped.keys(), key=lambda x: x.lower())):
+                with cols[i % len(cols)]:
+                    st.markdown(f"**{sec_name}**")
+                    for nm, q in sorted(grouped[sec_name], key=lambda x: x[0].lower()):
+                        st.write(f"{nm}: **{q}**")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1036,15 +1267,17 @@ def page_history() -> None:
 # ──────────────────────────────────────────────────────────────────────────────
 
 st.sidebar.header("Navigation")
-page = st.sidebar.radio("Go to", ["Count", "Template Builder", "Producers", "History"], index=0)
+page = st.sidebar.radio(
+    "Go to",
+    ["Count", "Items & Sections", "Producers", "History"],
+    index=0,
+)
 
 if page == "Count":
     page_count()
-elif page == "Template Builder":
+elif page == "Items & Sections":
     page_template_builder()
 elif page == "Producers":
     page_producers()
 elif page == "History":
     page_history()
-else:
-    st.error("Unknown page.")
