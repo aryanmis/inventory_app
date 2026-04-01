@@ -321,7 +321,17 @@ def init_db() -> None:
                     """)
 
 
-init_db()
+try:
+    init_db()
+except Exception as _db_err:
+    st.error(
+        "**Could not connect to the database.**\n\n"
+        "Make sure `DATABASE_URL` is set in your Streamlit Cloud secrets "
+        "(**Manage app → Secrets**):\n\n"
+        "```\nDATABASE_URL = \"postgresql://user:password@host:5432/dbname\"\n```\n\n"
+        f"Error: `{_db_err}`"
+    )
+    st.stop()
 
 
 # ──────────────────────────────────────────────────────────────────────────────
